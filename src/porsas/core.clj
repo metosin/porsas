@@ -6,7 +6,7 @@
            (javax.sql DataSource)))
 
 ;;
-;; Records
+;; Impl
 ;;
 
 (defn- record-instance [^Class cls]
@@ -53,7 +53,7 @@
                   :->instance ~pctor
                   :map->instance ~mctor}))))))))
 
-(defn rs->map-of-cols [cols]
+(defn- rs->map-of-cols [cols]
   (fn [^ResultSet rs]
     (reduce
       (fn [acc [i k]]
@@ -61,9 +61,11 @@
       nil
       cols)))
 
-;;
-;; Query
-;;
+(defn- rs-> [cs fields]
+  (let [rs (gensym)]
+    (eval
+      `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
+         (~cs ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc (count fields)))))))))
 
 (defn- get-column-names [^ResultSet rs]
   (let [rsmeta (.getMetaData rs)
@@ -82,7 +84,7 @@
         (recur (inc i))))))
 
 ;;
-;; Public API
+;; Protocols
 ;;
 
 (defprotocol RowCompiler
@@ -98,11 +100,9 @@
   DataSource
   (into-connection [this] (.getConnection this)))
 
-(defn- rs-> [cs fields]
-  (let [rs (gensym)]
-    (eval
-      `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
-         (~cs ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc (count fields)))))))))
+;;
+;; Public API
+;;
 
 (defn rs->record [record]
   (rs-> (constructor-symbol record) (record-fields record)))
