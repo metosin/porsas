@@ -2,6 +2,10 @@
   :description "Spike Lee for Fast DB-access"
   :url "https://github.com/metosin/porsas"
   :deploy-repositories [["releases" :clojars]]
+  :license {:name "Eclipse Public License"
+            :url "http://www.eclipse.org/legal/epl-v10.html"
+            :distribution :repo
+            :comments "same as Clojure"}
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
   :dependencies []
