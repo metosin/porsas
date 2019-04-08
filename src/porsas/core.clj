@@ -2,23 +2,8 @@
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str])
   (:import (java.sql Connection PreparedStatement ResultSet)
-           (java.lang.reflect Field Constructor)
+           (java.lang.reflect Field)
            (javax.sql DataSource)))
-
-;;
-;; Impl
-;;
-
-(defn- record-instance [^Class cls]
-  (let [constructor ^Constructor (first (sort-by #(.getParameterCount ^Constructor %) (.getConstructors cls)))]
-    (.newInstance constructor (object-array (.getParameterCount constructor)))))
-
-(defn- rs->record [pc mc]
-  (let [fields (count (mc {}))
-        rs (gensym)]
-    (eval
-      `(fn [~(with-meta rs {:tag 'ResultSet})]
-         (~pc ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc fields))))))))
 
 (defn- constructor-symbol [^Class record]
   (let [parts (str/split (.getName record) #"\.")]
@@ -61,11 +46,14 @@
       nil
       cols)))
 
-(defn- rs-> [cs fields]
+(defn- rs-> [pc fields]
   (let [rs (gensym)]
     (eval
       `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
-         (~cs ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc (count fields)))))))))
+         (~pc ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc (count fields)))))))))
+
+(defn- rs->record [pc mc]
+  (rs-> pc (keys (mc {}))))
 
 (defn- get-column-names [^ResultSet rs]
   (let [rsmeta (.getMetaData rs)
@@ -77,11 +65,12 @@
     (if n (recur (inc i) (conj acc [i n]) ns) acc)))
 
 (defn- set-params! [^PreparedStatement ps params]
-  (let [it (clojure.lang.RT/iter params)]
-    (loop [i 1]
-      (when (.hasNext it)
-        (.setObject ps i (.next it))
-        (recur (inc i))))))
+  (when params
+    (let [it (clojure.lang.RT/iter params)]
+      (loop [i 1]
+        (when (.hasNext it)
+          (.setObject ps i (.next it))
+          (recur (inc i)))))))
 
 ;;
 ;; Protocols
@@ -118,7 +107,8 @@
          (rs-> ->instance fields))))))
 
 (defn rs->map
-  ([])
+  ([]
+    (rs->map nil))
   ([_]
    (reify
      RowCompiler
@@ -126,7 +116,7 @@
        (let [rs (gensym)]
          (eval
            `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
-              ~(apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs ~v)]) (zipmap cols (range)))))))))))
+              ~(apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs (inc ~v))]) (zipmap cols (range)))))))))))
 
 
 (defn compile
@@ -147,15 +137,7 @@
                   row)]
      (fn compile-static
        ([^Connection con]
-        (let [ps (.prepareStatement con sql)]
-          (try
-            (let [rs (.executeQuery ps)]
-              (loop [res []]
-                (if (.next rs)
-                  (recur (conj res (row rs)))
-                  res)))
-            (finally
-              (.close ps)))))
+        (compile-static con nil))
        ([^Connection con params]
         (let [ps (.prepareStatement con sql)]
           (try
@@ -169,17 +151,7 @@
               (.close ps))))))
      (fn compile-dynamic
        ([^Connection con]
-        (let [ps (.prepareStatement con sql)]
-          (try
-            (let [rs (.executeQuery ps)]
-              (let [cols (col-map rs)
-                    row (rs->map-of-cols cols)]
-                (loop [res []]
-                  (if (.next rs)
-                    (recur (conj res (row rs)))
-                    res))))
-            (finally
-              (.close ps)))))
+        (compile-dynamic con nil))
        ([^Connection con params]
         (let [ps (.prepareStatement con sql)]
           (try
