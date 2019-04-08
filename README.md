@@ -14,12 +14,13 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
+`porsas` adds a clean separation for JDBC query compilation and execution: queries are compiled (optionally against a live database), producing optimized query-functions.
+
 ```clj
 (require '[porsas.core :as p])
 
 ;; get a database connection from somewhere
-(def con (clojure.java.jdbc/get-connection
-           {:dbtype "h2:mem" :dbname "perf"}))
+(def con (clojure.java.jdbc/get-connection {:dbtype "h2:mem" :dbname "perf"}))
 ```
 
 Mapping result to a predefined record:
