@@ -6,6 +6,12 @@ Spike to see how fast we can go with Clojure + JDBC. Highly Experimental.
 
 Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
+## Latest version
+
+```
+[metosin/porsas "0.0.1-SNAPSHOT"]
+```
+
 ## Usage
 
 ```clj
@@ -118,12 +124,6 @@ See [the tests](https://github.com/metosin/porsas/blob/master/test/porsas/core_t
 ## Caveats
 
 Some features use `eval`, and those will not work with [GraalVM](https://www.graalvm.org/).
-
-## Latest version
-
-```
-[metosin/porsas "0.0.1-SNAPSHOT"]
-```
 
 ## License
 
