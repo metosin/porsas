@@ -49,15 +49,15 @@
   (let [query (p/compile "SELECT * FROM fruit" {:row (p/rs->record Fruit)})]
     (bench! "porsas: derived, record" (query con)))
 
-  ;; 760ns (generate record and rs->record for this spesific query, use with care!)
+  ;; 720ns (generate record and rs->record for this spesific query, use with care!)
   (let [query (p/compile "SELECT * FROM fruit" {:con con :row (p/rs->compiled-record)})]
     (bench! "porsas: compiled record" (query con)))
 
-  ;; 810ns (precompile the result maps)
+  ;; 780ns (precompile the result maps)
   (let [query (p/compile "SELECT * FROM fruit" {:con con, :row (p/rs->map)})]
     (bench! "porsas: compiled map" (query con)))
 
-  ;; 2900ns (interpret the result maps)
+  ;; 2300ns (interpret the result maps)
   (let [query (p/compile "SELECT * FROM fruit" {:con con})]
     (bench! "porsas: interpreted map" (query con)))
 
@@ -65,7 +65,7 @@
   (let [query (p/compile "SELECT * FROM fruit")]
     (bench! "porsas: dynamic map" (query con)))
 
-  ;; 10000ns
+  ;; 9200ns
   (let [query #(j/query {:connection %} ["SELECT * FROM fruit"])]
     (bench! "java.jdbc" (query con))))
 

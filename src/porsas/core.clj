@@ -14,7 +14,7 @@
 (defn- map-value [keys]
   (zipmap keys (repeat nil)))
 
-(defn record-fields [cls]
+(defn- record-fields [cls]
   (for [^Field f (.getFields ^Class cls)
         :when (and (= Object (.getType f))
                    (not (.startsWith (.getName f) "__")))]
@@ -47,10 +47,13 @@
       cols)))
 
 (defn- rs-> [pc fields]
-  (let [rs (gensym)]
+  (let [rs (gensym)
+        fm (zipmap fields (range 1 (inc (count fields))))]
     (eval
       `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
-         (~pc ~@(map (fn [i] `(.getObject ~rs ^Integer ~i)) (range 1 (inc (count fields)))))))))
+         ~(if pc
+            `(~pc ~@(map (fn [[k v]] `(.getObject ~rs ~v)) fm))
+            (apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs ~v)]) fm)))))))
 
 (defn- rs->record [pc mc]
   (rs-> pc (keys (mc {}))))
@@ -108,15 +111,12 @@
 
 (defn rs->map
   ([]
-    (rs->map nil))
+   (rs->map nil))
   ([_]
    (reify
      RowCompiler
      (compile-row [_ cols]
-       (let [rs (gensym)]
-         (eval
-           `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
-              ~(apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs (inc ~v))]) (zipmap cols (range)))))))))))
+       (rs-> nil cols)))))
 
 
 (defn compile
