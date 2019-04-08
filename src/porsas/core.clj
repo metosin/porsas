@@ -1,18 +1,18 @@
 (ns porsas.core
   (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str])
-  (:import (java.sql Connection PreparedStatement ResultSet)
+  (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (java.lang.reflect Field)
            (javax.sql DataSource)))
+
+(defn- infer-params [sql]
+  (repeat (count (filter (partial = \?) sql)) nil))
 
 (defn- constructor-symbol [^Class record]
   (let [parts (str/split (.getName record) #"\.")]
     (-> (str (str/join "." (butlast parts)) "/->" (last parts))
         (str/replace #"_" "-")
         (symbol))))
-
-(defn- map-value [keys]
-  (zipmap keys (repeat nil)))
 
 (defn- record-fields [cls]
   (for [^Field f (.getFields ^Class cls)
@@ -23,8 +23,7 @@
 (def ^:private memoized-compile-record
   (memoize
     (fn [keys]
-      (if (some qualified-keyword? keys)
-        (map-value keys)
+      (if-not (some qualified-keyword? keys)
         (let [sym (gensym "DBEntry")
               mctor (symbol (str "map->" sym))
               pctor (symbol (str "->" sym))]
@@ -55,16 +54,13 @@
             `(~pc ~@(map (fn [[k v]] `(.getObject ~rs ~v)) fm))
             (apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs ~v)]) fm)))))))
 
-(defn- rs->record [pc mc]
-  (rs-> pc (keys (mc {}))))
-
-(defn- get-column-names [^ResultSet rs]
+(defn- get-column-names [^ResultSet rs key]
   (let [rsmeta (.getMetaData rs)
         idxs (range 1 (inc (.getColumnCount rsmeta)))]
-    (mapv (fn [^Integer i] (keyword (.getColumnLabel rsmeta i))) idxs)))
+    (mapv (fn [^Integer i] (key rsmeta i)) idxs)))
 
-(defn- col-map [^ResultSet rs]
-  (loop [i 1, acc [], [n & ns] (get-column-names rs)]
+(defn- col-map [^ResultSet rs key]
+  (loop [i 1, acc [], [n & ns] (get-column-names rs key)]
     (if n (recur (inc i) (conj acc [i n]) ns) acc)))
 
 (defn- set-params! [^PreparedStatement ps params]
@@ -83,7 +79,7 @@
   (compile-row [this cols]))
 
 (defprotocol IntoConnection
-  (into-connection [this]))
+  (^Connection into-connection [this]))
 
 (extend-protocol IntoConnection
   Connection
@@ -93,7 +89,27 @@
   (into-connection [this] (.getConnection this)))
 
 ;;
-;; Public API
+;; key
+;;
+
+(defn unqualified-key
+  ([]
+    (unqualified-key identity))
+  ([f]
+   (fn unqualified-key [^ResultSetMetaData rsmeta, ^Integer i]
+     (keyword (f (.getColumnLabel rsmeta i))))))
+
+(defn qualified-key
+  ([]
+    (qualified-key identity identity))
+  ([f]
+    (qualified-key f f))
+  ([ft fc]
+   (fn qualified-key [^ResultSetMetaData rsmeta, ^Integer i]
+     (keyword (ft (.getTableName rsmeta i)) (fc (.getColumnLabel rsmeta i))))))
+
+;;
+;; row
 ;;
 
 (defn rs->record [record]
@@ -118,16 +134,28 @@
      (compile-row [_ cols]
        (rs-> nil cols)))))
 
+;;
+;; Compiler
+;;
 
 (defn compile
+  "Given a SQL String and optional options, compiles a query into an effective
+  function of `connection params* -> results`. Accepts the following options:
+
+  | key          | description |
+  | -------------|-------------|
+  | `:row`       | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`       | Optional function of `rs-meta i->key` to create key for map-results
+  | `:con`       | Optional database connection to extract rs-meta at query compile time
+  | `:params`    | Optional parameters for extracting rs-meta at query compile time"
   ([^String sql]
    (compile sql nil))
-  ([^String sql {:keys [row con params]}]
+  ([^String sql {:keys [row key con params] :or {key (unqualified-key)}}]
    (if-let [row (if con
                   (let [ps (.prepareStatement ^Connection con sql)]
-                    (set-params! ps params)
+                    (set-params! ps (or params (infer-params sql)))
                     (let [rs (.executeQuery ps)]
-                      (let [cols (col-map rs)
+                      (let [cols (col-map rs key)
                             row (cond
                                   (satisfies? RowCompiler row) (compile-row row (map second cols))
                                   row row
@@ -157,9 +185,9 @@
           (try
             (set-params! ps params)
             (let [rs (.executeQuery ps)]
-              (let [cols (col-map rs)
+              (let [cols (col-map rs key)
                     row (rs->map-of-cols cols)]
-                (loop [res nil]
+                (loop [res []]
                   (if (.next rs)
                     (recur (conj res (row rs)))
                     res))))
