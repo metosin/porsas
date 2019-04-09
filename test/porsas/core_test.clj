@@ -112,8 +112,8 @@
 (require '[clojure.java.jdbc :as j])
 (require '[clojure.string :as str])
 
-(def db {:dbtype "h2:mem" :dbname "perf"})
-(def con (clojure.java.jdbc/get-connection
+(def con
+  (clojure.java.jdbc/get-connection
            {:dbtype "h2:mem" :dbname "perf"}))
 
 (try (j/execute! db ["DROP TABLE fruit"]) (catch Exception _))

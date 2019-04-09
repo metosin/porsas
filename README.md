@@ -14,13 +14,15 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
-`porsas` adds a clean separation for JDBC query compilation and execution: queries are compiled (optionally against a live database), producing optimized query-functions.
+`porsas` adds clean separation between JDBC query compilation and execution. Queries are compiled (optionally against a live database), producing optimized query-functions.
 
 ```clj
 (require '[porsas.core :as p])
 
 ;; get a database connection from somewhere
-(def con (clojure.java.jdbc/get-connection {:dbtype "h2:mem" :dbname "perf"}))
+(def con
+  (clojure.java.jdbc/get-connection
+    {:dbtype "h2:mem" :dbname "perf"}))
 ```
 
 Mapping result to a predefined record:
@@ -29,7 +31,9 @@ Mapping result to a predefined record:
 (defrecord Fruit [id name appearance cost grade])
 
 (def get-fruits
-  (p/compile "SELECT * FROM fruit" {:row (p/rs->record Fruit)}))
+  (p/compile 
+    "SELECT * FROM fruit" 
+    {:row (p/rs->record Fruit)}))
 
 (get-fruits con)
 ;[#user.Fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
@@ -92,10 +96,13 @@ Same with qualified keys:
 Partial application for a fully dynamic query:
 
 ```clj
-(def dynamic-get-fruits-map-qulified
-  (partial (p/compile "SELECT name, cost FROM fruit" {:key (p/qualified-key str/lower-case)})))
+(def dynamic-get-fruits-map-qualified
+  (partial 
+    (p/compile 
+      "SELECT name, cost FROM fruit" 
+      {:key (p/qualified-key str/lower-case)})))
 
-(dynamic-get-fruits-map-qulified con)
+(dynamic-get-fruits-map-qualified con)
 ;[#:fruit{:name "Apple", :cost 59}
 ; #:fruit{:name "Banana", :cost 29}
 ; #:fruit{:name "Peach", :cost 139}
