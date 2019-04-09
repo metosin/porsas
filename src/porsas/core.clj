@@ -14,10 +14,6 @@
 (defprotocol RowCompiler
   (compile-row [this cols]))
 
-(defprotocol BatchHandler
-  (batch-size [this])
-  (handle-batch [this batch]))
-
 (defprotocol IntoConnection
   (^Connection into-connection [this]))
 
@@ -99,9 +95,9 @@
           (recur (inc i)))))))
 
 (defn- -compile
-  [batch? ^String sql {:keys [row key con params size] :or {key (unqualified-key), size 100}}]
-  (let [row (if con
-              (let [ps (.prepareStatement ^Connection con sql)]
+  [batch? ^String sql {:keys [row key connection params size] :or {key (unqualified-key), size 100}}]
+  (let [row (if connection
+              (let [ps (.prepareStatement ^Connection connection sql)]
                 (prepare! ps (or params (infer-params sql)))
                 (let [rs (.executeQuery ps)]
                   (let [cols (col-map rs key)
@@ -116,10 +112,10 @@
 
       (and batch? row)
       (fn compile-static-batch
-        ([^Connection con callback]
-         (compile-static-batch con callback nil))
-        ([^Connection con callback params]
-         (let [ps (.prepareStatement con sql)
+        ([^Connection connection callback]
+         (compile-static-batch connection callback nil))
+        ([^Connection connection callback params]
+         (let [ps (.prepareStatement connection sql)
                count (atom 0)]
            (try
              (prepare! ps params)
@@ -140,10 +136,10 @@
 
       row
       (fn compile-static
-        ([^Connection con]
-         (compile-static con nil))
-        ([^Connection con params]
-         (let [ps (.prepareStatement con sql)]
+        ([^Connection connection]
+         (compile-static connection nil))
+        ([^Connection connection params]
+         (let [ps (.prepareStatement connection sql)]
            (try
              (prepare! ps params)
              (let [rs (.executeQuery ps)]
@@ -156,10 +152,10 @@
 
       batch?
       (fn compile-dynamic-batch
-        ([^Connection con callback]
-         (compile-dynamic-batch con callback nil))
-        ([^Connection con callback params]
-         (let [ps (.prepareStatement con sql)
+        ([^Connection connection callback]
+         (compile-dynamic-batch connection callback nil))
+        ([^Connection connection callback params]
+         (let [ps (.prepareStatement connection sql)
                count (atom 0)]
            (try
              (prepare! ps params)
@@ -182,10 +178,10 @@
 
       :else
       (fn compile-dynamic
-        ([^Connection con]
-         (compile-dynamic con nil))
-        ([^Connection con params]
-         (let [ps (.prepareStatement con sql)]
+        ([^Connection connection]
+         (compile-dynamic connection nil))
+        ([^Connection connection params]
+         (let [ps (.prepareStatement connection sql)]
            (try
              (prepare! ps params)
              (let [rs (.executeQuery ps)
@@ -252,12 +248,12 @@
   "Given a SQL String and optional options, compiles a query into an effective
   function of `connection ?params -> results`. Accepts the following options:
 
-  | key          | description |
-  | -------------|-------------|
-  | `:row`       | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-  | `:key`       | Optional function of `rs-meta i->key` to create key for map-results
-  | `:con`       | Optional database connection to extract rs-meta at query compile time
-  | `:params`    | Optional parameters for extracting rs-meta at query compile time"
+  | key           | description |
+  | --------------|-------------|
+  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
+  | `:connection` | Optional database connection to extract rs-meta at query compile time
+  | `:params`     | Optional parameters for extracting rs-meta at query compile time"
   ([sql] (-compile nil sql nil))
   ([sql opts] (-compile nil sql opts)))
 
@@ -268,12 +264,12 @@
 
   Accepts the following options:
 
-  | key          | description |
-  | -------------|-------------|
-  | `:row`       | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-  | `:key`       | Optional function of `rs-meta i->key` to create key for map-results
-  | `:size`      | Optional size of the batch (default 100)
-  | `:con`       | Optional database connection to extract rs-meta at query compile time
-  | `:params`    | Optional parameters for extracting rs-meta at query compile time"
+  | key           | description |
+  | --------------|-------------|
+  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
+  | `:size`       | Optional size of the batch (default 100)
+  | `:connection` | Optional database connection to extract rs-meta at query compile time
+  | `:params`     | Optional parameters for extracting rs-meta at query compile time"
   ([sql] (-compile true sql nil))
   ([sql opts] (-compile true sql opts)))

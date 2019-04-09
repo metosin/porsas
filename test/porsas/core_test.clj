@@ -6,7 +6,7 @@
   (:import (java.sql ResultSet Connection)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
-(def ^Connection con (p/into-connection (j/get-connection db)))
+(def ^Connection connection (p/into-connection (j/get-connection db)))
 
 (try (j/execute! db ["DROP TABLE fruit"]) (catch Exception _))
 (j/execute! db ["CREATE TABLE fruit (id int default 0, name varchar(32) primary key, appearance varchar(32), cost int, grade real)"])
@@ -26,8 +26,8 @@
     (.getObject rs 4)
     (.getObject rs 5)))
 
-(defn java-query [^String sql ^java.sql.Connection con]
-  (let [ps (.prepareStatement con sql)
+(defn java-query [^String sql ^java.sql.Connection connection]
+  (let [ps (.prepareStatement connection sql)
         rs (.executeQuery ps)
         res (loop [res []]
               (if (.next rs)
@@ -41,94 +41,95 @@
   ;; 760ns
   (let [query (partial java-query "SELECT * FROM fruit")]
     (title "java")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 760ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
                 {:row rs->Fruit})]
-    (bench! "porsas: manual, record" (query con)))
+    (title "porsas: manual, record")
+    (bench! (query connection)))
 
   ;; 720ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
                 {:row (p/rs->record Fruit)})]
     (title "porsas: derived, record")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 720ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :row (p/rs->compiled-record)
                  :key (p/unqualified-key str/lower-case)})]
     (title "porsas: generated record")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 780ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :row (p/rs->map)
                  :key (p/unqualified-key str/lower-case)})]
     (title "porsas: compiled map, unqualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 780ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :row (p/rs->map)
                  :key (p/qualified-key str/lower-case)})]
     (title "porsas: compiled map, qualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 1000ns
   (let [query (p/compile-batch
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :row (p/rs->map)
                  :key (p/qualified-key str/lower-case)})]
     (title "porsas: compiled map, qualified, batch")
-    (bench! (query con (constantly nil))))
+    (bench! (query connection (constantly nil))))
 
   ;; 2300ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :key (p/unqualified-key str/lower-case)})]
     (title "porsas: interpreted map, unqualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 2300ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
-                {:con con
+                {:connection connection
                  :key (p/qualified-key str/lower-case)})]
     (title "porsas: interpreted map, qualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 3200ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
                 {:key (p/unqualified-key str/lower-case)})]
     (title "porsas: dynamic map, unqualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 3200ns
   (let [query (p/compile
                 "SELECT * FROM fruit"
                 {:key (p/qualified-key str/lower-case)})]
     (title "porsas: dynamic map, unqualified")
-    (bench! (query con)))
+    (bench! (query connection)))
 
   ;; 9200ns
   (let [query #(j/query {:connection %} ["SELECT * FROM fruit"])]
     (title "java.jdbc")
-    (bench! (query con))))
+    (bench! (query connection))))
 
 (comment
-  (let [meta (.getMetaData (.executeQuery (.prepareStatement con "select * from fruit")))]
+  (let [meta (.getMetaData (.executeQuery (.prepareStatement connection "select * from fruit")))]
     (doseq [i (range 1 (inc (.getColumnCount meta)))]
       (println "   index:" i)
       (println "    name:" (.getColumnName meta i))

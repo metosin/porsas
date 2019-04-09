@@ -20,7 +20,7 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 (require '[porsas.core :as p])
 
 ;; get a database connection from somewhere
-(def con
+(def connection
   (clojure.java.jdbc/get-connection
     {:dbtype "h2:mem" :dbname "perf"}))
 ```
@@ -35,7 +35,7 @@ Mapping result to a predefined record:
     "SELECT * FROM fruit" 
     {:row (p/rs->record Fruit)}))
 
-(get-fruits con)
+(get-fruits connection)
 ;[#user.Fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
 ; #user.Fruit{:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
 ; #user.Fruit{:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
@@ -48,11 +48,11 @@ Generating a result record fro the given query:
 (def select-id-name-from-fruit
   (p/compile
     "SELECT id, name FROM fruit"
-    {:con con
+    {:connection connection
      :row (p/rs->compiled-record)
      :key (p/unqualified-key str/lower-case)}))
 
-(select-id-name-from-fruit con)
+(select-id-name-from-fruit connection)
 ;[#user.DBResult14487{:id 1, :name "Apple"}
 ; #user.DBResult14487{:id 2, :name "Banana"}
 ; #user.DBResult14487{:id 3, :name "Peach"}
@@ -65,11 +65,11 @@ Generating maps with simple keys:
 (def get-fruits-map
   (p/compile
     "SELECT * FROM fruit"
-    {:con con
+    {:connection connection
      :row (p/rs->map)
      :key (p/unqualified-key str/lower-case)}))
 
-(get-fruits-map con)
+(get-fruits-map connection)
 ;[{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
 ; {:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
 ; {:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
@@ -82,11 +82,11 @@ Same with qualified keys:
 (def get-fruits-map-qualified
   (p/compile
     "SELECT * FROM fruit"
-    {:con con
+    {:connection connection
      :row (p/rs->map)
      :key (p/qualified-key str/lower-case)}))
 
-(get-fruits-map-qualified con)
+(get-fruits-map-qualified connection)
 ;[#:fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
 ; #:fruit{:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
 ; #:fruit{:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
@@ -102,7 +102,7 @@ Partial application for a fully dynamic query:
       "SELECT name, cost FROM fruit" 
       {:key (p/qualified-key str/lower-case)})))
 
-(dynamic-get-fruits-map-qualified con)
+(dynamic-get-fruits-map-qualified connection)
 ;[#:fruit{:name "Apple", :cost 59}
 ; #:fruit{:name "Banana", :cost 29}
 ; #:fruit{:name "Peach", :cost 139}
@@ -115,11 +115,11 @@ Parameterized queries:
 (def get-fruits-by-color
   (p/compile
     "SELECT * FROM fruit where appearance = ?"
-    {:con con
+    {:connection connection
      :row (p/rs->map)
      :key (p/qualified-key str/lower-case)}))
 
-(get-fruits-by-color con ["red"])
+(get-fruits-by-color connection ["red"])
 ;[#:fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}]
 ```
 
@@ -131,12 +131,12 @@ As JDBC is blocking, so is this (returns the number of rows).
 (def get-fruits-map-qualified-batch
   (p/compile-batch
     "SELECT name FROM fruit"
-    {:con con
+    {:connection connection
      :size 3
      :row (p/rs->map)
      :key (p/qualified-key str/lower-case)}))
 
-(get-fruits-map-qualified-batch con (partial println "-->"))
+(get-fruits-map-qualified-batch connection (partial println "-->"))
 ;--> [#:fruit{:name Apple} #:fruit{:name Banana} #:fruit{:name Orange}]
 ;--> [#:fruit{:name Peach}]
 ; 4
