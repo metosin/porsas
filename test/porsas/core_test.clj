@@ -112,9 +112,8 @@
 (require '[clojure.java.jdbc :as j])
 (require '[clojure.string :as str])
 
-(def con
-  (clojure.java.jdbc/get-connection
-           {:dbtype "h2:mem" :dbname "perf"}))
+(def db {:dbtype "h2:mem" :dbname "perf"})
+(def con (clojure.java.jdbc/get-connection db))
 
 (try (j/execute! db ["DROP TABLE fruit"]) (catch Exception _))
 (j/execute! db ["CREATE TABLE fruit (id int default 0, name varchar(32) primary key, appearance varchar(32), cost int, grade real)"])
@@ -176,6 +175,20 @@
 ; #:fruit{:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
 ; #:fruit{:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
 ; #:fruit{:id 4, :name "Orange", :appearance "juicy", :cost 89, :grade 88.6}]
+
+
+(def get-fruits-map-qualified-batch
+  (p/compile-batch
+    "SELECT name FROM fruit"
+    {:con con
+     :size 3
+     :row (p/rs->map)
+     :key (p/qualified-key str/lower-case)}))
+
+(get-fruits-map-qualified-batch con (partial println "-->"))
+;--> [#:fruit{:name Apple} #:fruit{:name Banana} #:fruit{:name Orange}]
+;--> [#:fruit{:name Peach}]
+; 4
 
 (def dynamic-get-fruits-map-qulified
   (partial (p/compile "SELECT name, cost FROM fruit" {:key (p/qualified-key str/lower-case)})))

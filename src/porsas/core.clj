@@ -5,6 +5,33 @@
            (java.lang.reflect Field)
            (javax.sql DataSource)))
 
+(declare unqualified-key)
+
+;;
+;; Protocols
+;;
+
+(defprotocol RowCompiler
+  (compile-row [this cols]))
+
+(defprotocol BatchHandler
+  (batch-size [this])
+  (handle-batch [this batch]))
+
+(defprotocol IntoConnection
+  (^Connection into-connection [this]))
+
+(extend-protocol IntoConnection
+  Connection
+  (into-connection [this] this)
+
+  DataSource
+  (into-connection [this] (.getConnection this)))
+
+;;
+;; Implementation
+;;
+
 (defn- infer-params [sql]
   (repeat (count (filter (partial = \?) sql)) nil))
 
@@ -71,22 +98,105 @@
           (.setObject ps i (.next it))
           (recur (inc i)))))))
 
-;;
-;; Protocols
-;;
+(defn- -compile
+  [batch? ^String sql {:keys [row key con params size] :or {key (unqualified-key), size 100}}]
+  (let [row (if con
+              (let [ps (.prepareStatement ^Connection con sql)]
+                (prepare! ps (or params (infer-params sql)))
+                (let [rs (.executeQuery ps)]
+                  (let [cols (col-map rs key)
+                        row (cond
+                              (satisfies? RowCompiler row) (compile-row row (map second cols))
+                              row row
+                              :else (rs->map-of-cols cols))]
+                    (.close ps)
+                    row)))
+              row)]
+    (cond
 
-(defprotocol RowCompiler
-  (compile-row [this cols]))
+      (and batch? row)
+      (fn compile-static-batch
+        ([^Connection con callback]
+         (compile-static-batch con callback nil))
+        ([^Connection con callback params]
+         (let [ps (.prepareStatement con sql)
+               count (atom 0)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)]
+               (loop [i 1, res []]
+                 (cond
+                   (.next rs)
+                   (let [res (conj res (row rs))]
+                     (swap! count inc)
+                     (if (= i size)
+                       (do (callback res) (recur 1 []))
+                       (recur (inc i) res)))
+                   (seq res)
+                   (callback res))))
+             @count
+             (finally
+               (.close ps))))))
 
-(defprotocol IntoConnection
-  (^Connection into-connection [this]))
+      row
+      (fn compile-static
+        ([^Connection con]
+         (compile-static con nil))
+        ([^Connection con params]
+         (let [ps (.prepareStatement con sql)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)]
+               (loop [res []]
+                 (if (.next rs)
+                   (recur (conj res (row rs)))
+                   res)))
+             (finally
+               (.close ps))))))
 
-(extend-protocol IntoConnection
-  Connection
-  (into-connection [this] this)
+      batch?
+      (fn compile-dynamic-batch
+        ([^Connection con callback]
+         (compile-dynamic-batch con callback nil))
+        ([^Connection con callback params]
+         (let [ps (.prepareStatement con sql)
+               count (atom 0)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)
+                   cols (col-map rs key)
+                   row (rs->map-of-cols cols)]
+               (loop [i 1, res []]
+                 (cond
+                   (.next rs)
+                   (let [res (conj res (row rs))]
+                     (swap! count inc)
+                     (if (= i size)
+                       (do (callback res) (recur 1 []))
+                       (recur (inc i) res)))
+                   (seq res)
+                   (callback res))))
+             @count
+             (finally
+               (.close ps))))))
 
-  DataSource
-  (into-connection [this] (.getConnection this)))
+      :else
+      (fn compile-dynamic
+        ([^Connection con]
+         (compile-dynamic con nil))
+        ([^Connection con params]
+         (let [ps (.prepareStatement con sql)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)
+                   cols (col-map rs key)
+                   row (rs->map-of-cols cols)]
+               (loop [res []]
+                 (if (.next rs)
+                   (recur (conj res (row rs)))
+                   res)))
+             (finally
+               (.close ps)))))))))
 
 ;;
 ;; key
@@ -94,16 +204,16 @@
 
 (defn unqualified-key
   ([]
-    (unqualified-key identity))
+   (unqualified-key identity))
   ([f]
    (fn unqualified-key [^ResultSetMetaData rsmeta, ^Integer i]
      (keyword (f (.getColumnLabel rsmeta i))))))
 
 (defn qualified-key
   ([]
-    (qualified-key identity identity))
+   (qualified-key identity identity))
   ([f]
-    (qualified-key f f))
+   (qualified-key f f))
   ([ft fc]
    (fn qualified-key [^ResultSetMetaData rsmeta, ^Integer i]
      (keyword (ft (.getTableName rsmeta i)) (fc (.getColumnLabel rsmeta i))))))
@@ -140,7 +250,7 @@
 
 (defn compile
   "Given a SQL String and optional options, compiles a query into an effective
-  function of `connection params* -> results`. Accepts the following options:
+  function of `connection ?params -> results`. Accepts the following options:
 
   | key          | description |
   | -------------|-------------|
@@ -148,48 +258,22 @@
   | `:key`       | Optional function of `rs-meta i->key` to create key for map-results
   | `:con`       | Optional database connection to extract rs-meta at query compile time
   | `:params`    | Optional parameters for extracting rs-meta at query compile time"
-  ([^String sql]
-   (compile sql nil))
-  ([^String sql {:keys [row key con params] :or {key (unqualified-key)}}]
-   (if-let [row (if con
-                  (let [ps (.prepareStatement ^Connection con sql)]
-                    (prepare! ps (or params (infer-params sql)))
-                    (let [rs (.executeQuery ps)]
-                      (let [cols (col-map rs key)
-                            row (cond
-                                  (satisfies? RowCompiler row) (compile-row row (map second cols))
-                                  row row
-                                  :else (rs->map-of-cols cols))]
-                        (.close ps)
-                        row)))
-                  row)]
-     (fn compile-static
-       ([^Connection con]
-        (compile-static con nil))
-       ([^Connection con params]
-        (let [ps (.prepareStatement con sql)]
-          (try
-            (prepare! ps params)
-            (let [rs (.executeQuery ps)]
-              (loop [res []]
-                (if (.next rs)
-                  (recur (conj res (row rs)))
-                  res)))
-            (finally
-              (.close ps))))))
-     (fn compile-dynamic
-       ([^Connection con]
-        (compile-dynamic con nil))
-       ([^Connection con params]
-        (let [ps (.prepareStatement con sql)]
-          (try
-            (prepare! ps params)
-            (let [rs (.executeQuery ps)]
-              (let [cols (col-map rs key)
-                    row (rs->map-of-cols cols)]
-                (loop [res []]
-                  (if (.next rs)
-                    (recur (conj res (row rs)))
-                    res))))
-            (finally
-              (.close ps)))))))))
+  ([sql] (-compile nil sql nil))
+  ([sql opts] (-compile nil sql opts)))
+
+(defn compile-batch
+  "Given a SQL String and optional options, compiles a query into an effective batching
+  function of `connection callback ?params`, which calls the `callback` argument for each full
+  (and the final maybe not full) batch of results.
+
+  Accepts the following options:
+
+  | key          | description |
+  | -------------|-------------|
+  | `:row`       | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`       | Optional function of `rs-meta i->key` to create key for map-results
+  | `:size`      | Optional size of the batch (default 100)
+  | `:con`       | Optional database connection to extract rs-meta at query compile time
+  | `:params`    | Optional parameters for extracting rs-meta at query compile time"
+  ([sql] (-compile true sql nil))
+  ([sql opts] (-compile true sql opts)))

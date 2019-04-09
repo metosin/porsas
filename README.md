@@ -123,6 +123,23 @@ Parameterized queries:
 ;[#:fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}]
 ```
 
+### Streaming results
+
+```clj
+(def get-fruits-map-qualified-batch
+  (p/compile-batch
+    "SELECT name FROM fruit"
+    {:con con
+     :size 3
+     :row (p/rs->map)
+     :key (p/qualified-key str/lower-case)}))
+
+(get-fruits-map-qualified-batch con (partial println "-->"))
+;--> [#:fruit{:name Apple} #:fruit{:name Banana} #:fruit{:name Orange}]
+;--> [#:fruit{:name Peach}]
+; 4
+```
+
 ## Performance
 
 At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.com/clojure/java.jdbc).
