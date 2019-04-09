@@ -12,9 +12,8 @@
 (def title (partial raw-title "\u001B[35m"))
 (def suite (partial raw-title "\u001B[32m"))
 
-(defmacro bench! [name & body]
+(defmacro bench! [& body]
   `(do
-     (title ~name)
      (println "\u001B[33m")
      (clojure.pprint/pprint ~@body)
      (println "\u001B[0m")
