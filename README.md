@@ -125,6 +125,8 @@ Parameterized queries:
 
 ### Streaming results
 
+As JDBC is blocking, so is this (returns the number of rows).
+
 ```clj
 (def get-fruits-map-qualified-batch
   (p/compile-batch
