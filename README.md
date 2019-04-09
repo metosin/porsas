@@ -53,10 +53,10 @@ Generating a result record fro the given query:
      :key (p/unqualified-key str/lower-case)}))
 
 (select-id-name-from-fruit con)
-;[#user.DBEntry14487{:id 1, :name "Apple"}
-; #user.DBEntry14487{:id 2, :name "Banana"}
-; #user.DBEntry14487{:id 3, :name "Peach"}
-; #user.DBEntry14487{:id 4, :name "Orange"}]
+;[#user.DBResult14487{:id 1, :name "Apple"}
+; #user.DBResult14487{:id 2, :name "Banana"}
+; #user.DBResult14487{:id 3, :name "Peach"}
+; #user.DBResult14487{:id 4, :name "Orange"}]
 ```
 
 Generating maps with simple keys:

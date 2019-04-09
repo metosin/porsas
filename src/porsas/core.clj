@@ -51,7 +51,7 @@
   (memoize
     (fn [keys]
       (if-not (some qualified-keyword? keys)
-        (let [sym (gensym "DBEntry")
+        (let [sym (gensym "DBResult")
               mctor (symbol (str "map->" sym))
               pctor (symbol (str "->" sym))]
           (binding [*ns* (find-ns 'user)]
