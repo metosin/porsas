@@ -63,7 +63,7 @@
   (loop [i 1, acc [], [n & ns] (get-column-names rs key)]
     (if n (recur (inc i) (conj acc [i n]) ns) acc)))
 
-(defn- set-params! [^PreparedStatement ps params]
+(defn- prepare! [^PreparedStatement ps params]
   (when params
     (let [it (clojure.lang.RT/iter params)]
       (loop [i 1]
@@ -153,7 +153,7 @@
   ([^String sql {:keys [row key con params] :or {key (unqualified-key)}}]
    (if-let [row (if con
                   (let [ps (.prepareStatement ^Connection con sql)]
-                    (set-params! ps (or params (infer-params sql)))
+                    (prepare! ps (or params (infer-params sql)))
                     (let [rs (.executeQuery ps)]
                       (let [cols (col-map rs key)
                             row (cond
@@ -169,7 +169,7 @@
        ([^Connection con params]
         (let [ps (.prepareStatement con sql)]
           (try
-            (set-params! ps params)
+            (prepare! ps params)
             (let [rs (.executeQuery ps)]
               (loop [res []]
                 (if (.next rs)
@@ -183,7 +183,7 @@
        ([^Connection con params]
         (let [ps (.prepareStatement con sql)]
           (try
-            (set-params! ps params)
+            (prepare! ps params)
             (let [rs (.executeQuery ps)]
               (let [cols (col-map rs key)
                     row (rs->map-of-cols cols)]
