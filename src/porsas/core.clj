@@ -62,7 +62,7 @@
 
 (defn- rs->map-of-cols [cols]
   (let [size (* 2 (count cols))]
-  (fn [^ResultSet rs]
+    (fn [^ResultSet rs]
       (let [a ^objects (make-array Object size)
             iter (clojure.lang.RT/iter cols)]
         (while (.hasNext iter)
@@ -278,3 +278,57 @@
   | `:params`     | Optional parameters for extracting rs-meta at query compile time"
   ([sql] (-compile true sql nil))
   ([sql opts] (-compile true sql opts)))
+
+;;
+;; Queries
+;;
+
+(defn create-query
+  "Creates a memoizing query function accepting the following options:
+
+  | key           | description |
+  | --------------|-------------|
+  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
+  ([]
+   (create-query nil))
+  ([{:keys [row key] :or {key (unqualified-key)}}]
+   (let [cache (java.util.HashMap.) ;; TODO: bounded & inspectable
+         ->row (fn [sql rs]
+                 (let [cols (col-map rs key)
+                       row (cond
+                             (satisfies? RowCompiler row) (compile-row row (map second cols))
+                             row row
+                             :else (rs->map-of-cols cols))]
+                   (.put cache sql row)
+                   row))]
+     (fn query
+       ([^Connection connection sql]
+        (query connection sql nil))
+       ([^Connection connection sql params]
+        (let [ps (.prepareStatement connection sql)]
+          (try
+            (prepare! ps params)
+            (let [rs (.executeQuery ps)
+                  row (or (.get cache sql) (->row sql rs))]
+              (loop [res []]
+                (if (.next rs)
+                  (recur (conj res (row rs)))
+                  res)))
+            (finally
+              (.close ps)))))))))
+
+(defn query
+  "Creates and executes a query, accepting the following options:
+
+  | key           | description |
+  | --------------|-------------|
+  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
+  ([^Connection connection sql]
+   (query connection sql nil nil))
+  ([^Connection connection sql params]
+   (query connection sql params nil))
+  ([^Connection connection sql params opts]
+   (let [query (create-query opts)]
+     (query connection sql params))))
