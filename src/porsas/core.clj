@@ -61,12 +61,17 @@
                   :map->instance ~mctor}))))))))
 
 (defn- rs->map-of-cols [cols]
+  (let [size (* 2 (count cols))]
   (fn [^ResultSet rs]
-    (reduce
-      (fn [acc [i k]]
-        (assoc acc k (.getObject rs ^Integer i)))
-      nil
-      cols)))
+      (let [a ^objects (make-array Object size)
+            iter (clojure.lang.RT/iter cols)]
+        (while (.hasNext iter)
+          (let [v (.next iter)
+                i ^int (nth v 0)
+                i' (* 2 (dec i))]
+            (aset a i' (nth v 1))
+            (aset a (inc i') (.getObject rs ^Integer i))))
+        (clojure.lang.PersistentArrayMap. a)))))
 
 (defn- rs-> [pc fields]
   (let [rs (gensym)
