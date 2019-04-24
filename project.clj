@@ -13,7 +13,8 @@
                    :dependencies [[org.clojure/clojure "1.10.0"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.3.0"]
                                   [com.h2database/h2 "1.4.197"]
-                                  [seancorfield/next.jdbc "1.0.0-alpha5"]
+                                  [seancorfield/next.jdbc "1.0.0-alpha9"]
+                                  [funcool/clojure.jdbc "0.9.0"]
                                   [org.clojure/java.jdbc "0.7.9"]
                                   [criterium "0.4.4"]]}
              :perf {:jvm-opts ^:replace ["-server"

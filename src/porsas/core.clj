@@ -3,7 +3,8 @@
   (:require [clojure.string :as str])
   (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (java.lang.reflect Field)
-           (javax.sql DataSource)))
+           (javax.sql DataSource)
+           (clojure.lang PersistentVector)))
 
 (declare unqualified-key)
 
@@ -14,15 +15,28 @@
 (defprotocol RowCompiler
   (compile-row [this cols]))
 
-(defprotocol IntoConnection
-  (^Connection into-connection [this]))
+(defprotocol GetConnection
+  (get-connection [this]))
 
-(extend-protocol IntoConnection
+(extend-protocol GetConnection
   Connection
-  (into-connection [this] this)
+  (get-connection [this] this)
 
   DataSource
-  (into-connection [this] (.getConnection this)))
+  (get-connection [this] (.getConnection this)))
+
+(defprotocol SQLAndParams
+  (get-sql [this])
+  (get-params [this]))
+
+(extend-protocol SQLAndParams
+  String
+  (get-sql [this] this)
+  (get-params [_])
+
+  PersistentVector
+  (get-sql [this] (nth this 0))
+  (get-params [this] (nth this 1 nil)))
 
 ;;
 ;; Implementation
@@ -303,20 +317,20 @@
                    (.put cache sql row)
                    row))]
      (fn query
-       ([^Connection connection sql]
-        (query connection sql nil))
-       ([^Connection connection sql params]
-        (let [ps (.prepareStatement connection sql)]
-          (try
-            (prepare! ps params)
-            (let [rs (.executeQuery ps)
-                  row (or (.get cache sql) (->row sql rs))]
-              (loop [res []]
-                (if (.next rs)
-                  (recur (conj res (row rs)))
-                  res)))
-            (finally
-              (.close ps)))))))))
+       [^Connection connection sqlvec]
+       (let [sql (get-sql sqlvec)
+             params (get-params sqlvec)
+             ps (.prepareStatement connection sql)]
+         (try
+           (prepare! ps params)
+           (let [rs (.executeQuery ps)
+                 row (or (.get cache sql) (->row sql rs))]
+             (loop [res []]
+               (if (.next rs)
+                 (recur (conj res (row rs)))
+                 res)))
+           (finally
+             (.close ps))))))))
 
 (defn query
   "Creates and executes a query, accepting the following options:
@@ -325,10 +339,9 @@
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
-  ([^Connection connection sql]
-   (query connection sql nil nil))
-  ([^Connection connection sql params]
-   (query connection sql params nil))
-  ([^Connection connection sql params opts]
+  ([^Connection connection sqlvec]
+   (let [query (create-query nil)]
+     (query connection sqlvec)))
+  ([^Connection connection sqlvec opts]
    (let [query (create-query opts)]
-     (query connection sql params))))
+     (query connection sqlvec))))

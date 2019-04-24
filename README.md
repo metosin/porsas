@@ -14,143 +14,69 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
-`porsas` adds clean separation between JDBC query compilation and execution. Queries are compiled (optionally against a live database), producing optimized query-functions.
+`porsas` provides tools for precompiing the functions for converting `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
+
+Query functions take either a plain SQL String or a vector of SQL String and parameters.
+
+### A Java JDBC query
 
 ```clj
-(require '[porsas.core :as p])
-
-;; get a database connection from somewhere
-(def connection
-  (clojure.java.jdbc/get-connection
-    {:dbtype "h2:mem" :dbname "perf"}))
+;; 630ns
+(title "java")
+(bench! (java-query connection "SELECT * FROM fruit"))
 ```
 
-Mapping result to a predefined record:
+### Compiled query functions
+
+`create-query` return query function, which compiles and memoizes fast Clojure code for each unique SQL query string. It takes the following options:
+
+| key           | description |
+| --------------|-------------|
+| `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+| `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
+
+Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at runtime, which might not supported in all platforms like [GraalVM](https://www.graalvm.org/).
 
 ```clj
-(defrecord Fruit [id name appearance cost grade])
+(def query (p/create-query {:row (p/rs->map)}))
 
-(def get-fruits
-  (p/compile 
-    "SELECT * FROM fruit" 
-    {:row (p/rs->record Fruit)}))
-
-(get-fruits connection)
-;[#user.Fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
-; #user.Fruit{:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
-; #user.Fruit{:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
-; #user.Fruit{:id 4, :name "Orange", :appearance "juicy", :cost 89, :grade 88.6}]
+;; 630ns
+(title "porsas: compiled & cached query")
+(bench! (query connection "SELECT * FROM fruit")))
 ```
 
-Generating a result record fro the given query:
+### Cached query functions
+
+With defaults, a bit slower (non-compiled) mapper is used. Works on all platforms.
 
 ```clj
-(def select-id-name-from-fruit
-  (p/compile
-    "SELECT id, name FROM fruit"
-    {:connection connection
-     :row (p/rs->compiled-record)
-     :key (p/unqualified-key str/lower-case)}))
+(def query (p/create-query))
 
-(select-id-name-from-fruit connection)
-;[#user.DBResult14487{:id 1, :name "Apple"}
-; #user.DBResult14487{:id 2, :name "Banana"}
-; #user.DBResult14487{:id 3, :name "Peach"}
-; #user.DBResult14487{:id 4, :name "Orange"}]
+;; 1400ns
+(title "porsas: cached query")
+(bench! (query connection "SELECT * FROM fruit")))
 ```
 
-Generating maps with simple keys:
+### Fully Dynamic queries
+
+`p/query` works just like `query`, but doesn't use any cache.
 
 ```clj
-(def get-fruits-map
-  (p/compile
-    "SELECT * FROM fruit"
-    {:connection connection
-     :row (p/rs->map)
-     :key (p/unqualified-key str/lower-case)}))
-
-(get-fruits-map connection)
-;[{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
-; {:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
-; {:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
-; {:id 4, :name "Orange", :appearance "juicy", :cost 89, :grade 88.6}]
-```
-
-Same with qualified keys:
-
-```clj
-(def get-fruits-map-qualified
-  (p/compile
-    "SELECT * FROM fruit"
-    {:connection connection
-     :row (p/rs->map)
-     :key (p/qualified-key str/lower-case)}))
-
-(get-fruits-map-qualified connection)
-;[#:fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
-; #:fruit{:id 2, :name "Banana", :appearance "yellow", :cost 29, :grade 92.2}
-; #:fruit{:id 3, :name "Peach", :appearance "fuzzy", :cost 139, :grade 90.0}
-; #:fruit{:id 4, :name "Orange", :appearance "juicy", :cost 89, :grade 88.6}]
-```
-
-Partial application for a fully dynamic query:
-
-```clj
-(def dynamic-get-fruits-map-qualified
-  (partial 
-    (p/compile 
-      "SELECT name, cost FROM fruit" 
-      {:key (p/qualified-key str/lower-case)})))
-
-(dynamic-get-fruits-map-qualified connection)
-;[#:fruit{:name "Apple", :cost 59}
-; #:fruit{:name "Banana", :cost 29}
-; #:fruit{:name "Peach", :cost 139}
-; #:fruit{:name "Orange", :cost 89}]
-```
-
-Parameterized queries:
-
-```clj
-(def get-fruits-by-color
-  (p/compile
-    "SELECT * FROM fruit where appearance = ?"
-    {:connection connection
-     :row (p/rs->map)
-     :key (p/qualified-key str/lower-case)}))
-
-(get-fruits-by-color connection ["red"])
-;[#:fruit{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}]
-```
-
-### Streaming results
-
-As JDBC is blocking, so is this (returns the number of rows).
-
-```clj
-(def get-fruits-map-qualified-batch
-  (p/compile-batch
-    "SELECT name FROM fruit"
-    {:connection connection
-     :size 3
-     :row (p/rs->map)
-     :key (p/qualified-key str/lower-case)}))
-
-(get-fruits-map-qualified-batch connection (partial println "-->"))
-;--> [#:fruit{:name Apple} #:fruit{:name Banana} #:fruit{:name Orange}]
-;--> [#:fruit{:name Peach}]
-; 4
+;; 2100ns
+(title "porsas: dynamic query")
+(bench! (p/query connection "SELECT * FROM fruit"))
 ```
 
 ## Performance
 
-At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.com/clojure/java.jdbc).
+At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.com/clojure/java.jdbc), see [the tests](https://github.com/metosin/porsas/blob/master/test/porsas/core_test.clj) for more details.
 
-See [the tests](https://github.com/metosin/porsas/blob/master/test/porsas/core_test.clj).
+## TODO
 
-## Caveats
-
-Some features use `eval`, and those will not work with [GraalVM](https://www.graalvm.org/).
+* more tests
+* bounded cache for statement memoization
+* batch-api
+* async-api for postgresql?
 
 ## License
 

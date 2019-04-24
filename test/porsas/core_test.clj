@@ -3,13 +3,13 @@
             [porsas.perf-utils :refer :all]
             [clojure.java.jdbc :as j]
             [next.jdbc :as jdbc]
+            [jdbc.core :as funcool]
             [clojure.string :as str]
             [criterium.core :as cc])
-  (:import (java.sql ResultSet Connection)
-           (clojure.lang RT)))
+  (:import (java.sql ResultSet Connection)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
-(def ^Connection connection (p/into-connection (j/get-connection db)))
+(def ^Connection connection (j/get-connection db))
 
 (try (j/execute! db ["DROP TABLE fruit"]) (catch Exception _))
 (j/execute! db ["CREATE TABLE fruit (id int default 0, name varchar(32) primary key, appearance varchar(32), cost int, grade real)"])
@@ -134,10 +134,10 @@
 
   ;; 630ns
   (let [query (p/create-query {:row (p/rs->map)})]
-    (title "porsas: compiled & cached query")
+    (title "porsas: compiled query")
     (bench! (query connection "SELECT * FROM fruit")))
 
-  ;; 1400ns
+  ;; 1300ns
   (let [query (p/create-query)]
     (title "porsas: cached query")
     (bench! (query connection "SELECT * FROM fruit")))
@@ -146,13 +146,17 @@
   (title "porsas: dynamic query")
   (bench! (p/query connection "SELECT * FROM fruit"))
 
-  ;; 3500ns
+  ;; 3400ns
   (title "next.jdbc")
   (bench! (jdbc/execute! connection ["SELECT * FROM fruit"]))
 
-  ;; 6600ns
+  ;; 5100µs
+  (title "clojure.jdbc")
+  (bench! (funcool/fetch connection ["SELECT * FROM fruit"])
+
+  ;; 6500ns
   (title "java.jdbc")
-  (bench! (j/query {:connection connection} ["SELECT * FROM fruit"])))
+  (bench! (j/query {:connection connection} ["SELECT * FROM fruit"]))))
 
 (comment
   (perf-test))
