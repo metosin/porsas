@@ -1,4 +1,6 @@
-# porsas
+# porsas [![cljdoc badge](https://cljdoc.xyz/badge/metosin/porsas)](https://cljdoc.xyz/jump/release/metosin/porsas)
+
+<img src="./docs/images/logo.png" width=200 align="right"/>
 
 > Nopea kuin sika pakkasella
 
@@ -8,9 +10,7 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Latest version
 
-```
-[metosin/porsas "0.0.1-SNAPSHOT"]
-```
+[![Clojars Project](http://clojars.org/metosin/porsas/latest-version.svg)](http://clojars.org/metosin/porsas)
 
 ## Usage
 
