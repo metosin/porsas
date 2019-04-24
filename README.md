@@ -71,6 +71,8 @@ With defaults, a bit slower (non-compiled) mapper is used. Works on all platform
 
 At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.com/clojure/java.jdbc), see [the tests](https://github.com/metosin/porsas/blob/master/test/porsas/core_test.clj) for more details.
 
+<img src="./docs/images/porsas.png"/>
+
 ## TODO
 
 * more tests
