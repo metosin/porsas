@@ -41,16 +41,15 @@
     (.close ps)
     res))
 
-(defn cached-row-builder
+(defn caching-row-builder
   ([]
-   (cached-row-builder (p/qualified-key)))
+   (caching-row-builder (p/qualified-key)))
   ([key]
    (let [cache (HashMap.)] ;; TODO: make bounded
      (fn [^ResultSet rs opts]
        (let [sql (:next.jdbc/sql-string opts)
              ->row (or (.get cache sql)
-                       (let [cols (#'p/col-map rs key)
-                             ->row (#'p/rs-> nil (map second cols))]
+                       (let [->row (#'p/rs-> nil (map second (#'p/col-map rs key)))]
                          (.put cache sql ->row)
                          ->row))]
          (reify
@@ -169,7 +168,7 @@
 
   ;; 1500ns
   (title "next.jdbc: compiled")
-  (let [cached-builder (cached-row-builder)]
+  (let [cached-builder (caching-row-builder)]
     (bench! (jdbc/execute! connection ["SELECT * FROM fruit"] {:builder-fn cached-builder})))
 
   ;; 2100ns
