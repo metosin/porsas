@@ -3,10 +3,12 @@
             [porsas.perf-utils :refer :all]
             [clojure.java.jdbc :as j]
             [next.jdbc :as jdbc]
+            [next.jdbc.result-set :as rs]
             [jdbc.core :as funcool]
             [clojure.string :as str]
             [criterium.core :as cc])
-  (:import (java.sql ResultSet Connection)))
+  (:import (java.sql ResultSet Connection)
+           (java.util HashMap)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
 (def ^Connection connection (j/get-connection db))
@@ -38,6 +40,29 @@
                 res))]
     (.close ps)
     res))
+
+(defn cached-row-builder
+  ([]
+   (cached-row-builder (p/qualified-key)))
+  ([key]
+   (let [cache (HashMap.)] ;; TODO: make bounded
+     (fn [^ResultSet rs opts]
+       (let [sql (:next.jdbc/sql-string opts)
+             ->row (or (.get cache sql)
+                       (let [cols (#'p/col-map rs key)
+                             ->row (#'p/rs-> nil (map second cols))]
+                         (.put cache sql ->row)
+                         ->row))]
+         (reify
+           rs/RowBuilder
+           (->row [_] (->row rs))
+           (with-column [_ row _] row)
+           (column-count [_] 0)
+           (row! [_ row] row)
+           rs/ResultSetBuilder
+           (->rs [_] (transient []))
+           (with-row [_ rs row] (conj! rs row))
+           (rs! [_ rs] (persistent! rs))))))))
 
 (comment
 
@@ -142,21 +167,26 @@
     (title "porsas: cached query")
     (bench! (query connection "SELECT * FROM fruit")))
 
+  ;; 1500ns
+  (title "next.jdbc: compiled")
+  (let [cached-builder (cached-row-builder)]
+    (bench! (jdbc/execute! connection ["SELECT * FROM fruit"] {:builder-fn cached-builder})))
+
   ;; 2100ns
   (title "porsas: dynamic query")
   (bench! (p/query connection "SELECT * FROM fruit"))
 
-  ;; 3400ns
+  ;; 4000ns
   (title "next.jdbc")
   (bench! (jdbc/execute! connection ["SELECT * FROM fruit"]))
 
-  ;; 5100µs
+  ;; 4700µs
   (title "clojure.jdbc")
-  (bench! (funcool/fetch connection ["SELECT * FROM fruit"])
+  (bench! (funcool/fetch connection ["SELECT * FROM fruit"]))
 
   ;; 6500ns
   (title "java.jdbc")
-  (bench! (j/query {:connection connection} ["SELECT * FROM fruit"]))))
+  (bench! (j/query {:connection connection} ["SELECT * FROM fruit"])))
 
 (comment
   (perf-test))

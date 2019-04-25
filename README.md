@@ -1,6 +1,6 @@
 # porsas [![cljdoc badge](https://cljdoc.xyz/badge/metosin/porsas)](https://cljdoc.xyz/jump/release/metosin/porsas)
 
-<img src="./docs/images/logo.png" width=200 align="right"/>
+<img src="./docs/images/logo.png" width=180 align="right"/>
 
 > Nopea kuin sika pakkasella
 
