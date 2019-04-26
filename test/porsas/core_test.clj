@@ -63,93 +63,6 @@
            (with-row [_ rs row] (conj! rs row))
            (rs! [_ rs] (persistent! rs))))))))
 
-(comment
-
-  ;; 760ns
-  (let [query #(java-query % "SELECT * FROM fruit")]
-    (title "java")
-    (bench! (query connection)))
-
-  ;; 760ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:row rs->Fruit})]
-    (title "porsas: manual, record")
-    (bench! (query connection)))
-
-  ;; 720ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:row (p/rs->record Fruit)})]
-    (title "porsas: derived, record")
-    (bench! (query connection)))
-
-  ;; 720ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :row (p/rs->compiled-record)
-                 :key (p/unqualified-key str/lower-case)})]
-    (title "porsas: generated record")
-    (bench! (query connection)))
-
-  ;; 780ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :row (p/rs->map)
-                 :key (p/unqualified-key str/lower-case)})]
-    (title "porsas: compiled map, unqualified")
-    (bench! (query connection)))
-
-  ;; 660ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :row (p/rs->map)
-                 :key (p/qualified-key str/lower-case)})]
-    (title "porsas: compiled map, qualified")
-    (bench! (query connection)))
-
-  ;; 1000ns
-  (let [query (p/compile-batch
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :row (p/rs->map)
-                 :key (p/qualified-key str/lower-case)})]
-    (title "porsas: compiled map, qualified, batch")
-    (bench! (query connection (constantly nil))))
-
-  ;; 2300ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :key (p/unqualified-key str/lower-case)})]
-    (title "porsas: interpreted map, unqualified")
-    (bench! (query connection)))
-
-  ;; 2300ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:connection connection
-                 :key (p/qualified-key str/lower-case)})]
-    (title "porsas: interpreted map, qualified")
-    (bench! (query connection)))
-
-  ;; 3200ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:key (p/unqualified-key str/lower-case)})]
-    (title "porsas: dynamic map, unqualified")
-    (bench! (query connection)))
-
-  ;; 3200ns
-  (let [query (p/compile
-                "SELECT * FROM fruit"
-                {:key (p/qualified-key str/lower-case)})]
-    (title "porsas: dynamic map, unqualified")
-    (bench! (query connection))))
-
 (defn perf-test []
 
   ;; 630ns
@@ -159,6 +72,21 @@
   ;; 630ns
   (let [query (p/create-query {:row (p/rs->map)})]
     (title "porsas: compiled query")
+    (bench! (query connection "SELECT * FROM fruit")))
+
+  ;; 630ns
+  (let [query (p/create-query {:row rs->Fruit})]
+    (title "porsas: hand-written")
+    (bench! (query connection "SELECT * FROM fruit")))
+
+  ;; 630ns
+  (let [query (p/create-query {:row (p/rs->record Fruit)})]
+    (title "porsas: inferred from record")
+    (bench! (query connection "SELECT * FROM fruit")))
+
+  ;; 630ns
+  (let [query (p/create-query {:row (p/rs->compiled-record)})]
+    (title "porsas: compiled record")
     (bench! (query connection "SELECT * FROM fruit")))
 
   ;; 1300ns
