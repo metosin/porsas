@@ -117,7 +117,8 @@
   (bench! (j/query {:connection connection} ["SELECT * FROM fruit"])))
 
 (comment
-  (perf-test))
+  (binding [*show-results* false, *show-response* false]
+    (perf-test)))
 
 (comment
   (let [meta (.getMetaData (.executeQuery (.prepareStatement connection "select * from fruit")))]
