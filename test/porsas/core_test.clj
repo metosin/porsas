@@ -42,6 +42,7 @@
     res))
 
 (defn caching-row-builder
+  "for next.jdbc"
   ([]
    (caching-row-builder (p/qualified-key)))
   ([key]
