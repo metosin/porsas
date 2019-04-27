@@ -71,27 +71,27 @@
   (bench! (java-query connection "SELECT * FROM fruit"))
 
   ;; 630ns
-  (let [query (p/create-query {:row (p/rs->map)})]
+  (let [{:keys [query]} (p/compile {:row (p/rs->map)})]
     (title "porsas: compiled query")
     (bench! (query connection "SELECT * FROM fruit")))
 
   ;; 630ns
-  (let [query (p/create-query {:row rs->Fruit})]
+  (let [{:keys [query]} (p/compile {:row rs->Fruit})]
     (title "porsas: hand-written")
     (bench! (query connection "SELECT * FROM fruit")))
 
   ;; 630ns
-  (let [query (p/create-query {:row (p/rs->record Fruit)})]
+  (let [{:keys [query]} (p/compile {:row (p/rs->record Fruit)})]
     (title "porsas: inferred from record")
     (bench! (query connection "SELECT * FROM fruit")))
 
   ;; 630ns
-  (let [query (p/create-query {:row (p/rs->compiled-record)})]
+  (let [{:keys [query]} (p/compile {:row (p/rs->compiled-record)})]
     (title "porsas: compiled record")
     (bench! (query connection "SELECT * FROM fruit")))
 
   ;; 1300ns
-  (let [query (p/create-query)]
+  (let [{:keys [query]} (p/compile)]
     (title "porsas: cached query")
     (bench! (query connection "SELECT * FROM fruit")))
 

@@ -38,6 +38,8 @@
   (get-sql [this] (nth this 0))
   (get-params [this] (subvec this 1)))
 
+(defrecord CompiledQueries [query query-one])
+
 ;;
 ;; Implementation
 ;;
@@ -160,15 +162,23 @@
 ;; Queries
 ;;
 
-(defn create-query
-  "Creates a memoizing query function accepting the following options:
+(defn ^CompiledQueries compile
+  "Returns a [[CompiledQueries]] record containing query functions of type
+  `Connection sql-vec => result`. The following functions are compiled:
+
+  | key           | description |
+  | --------------|-------------|
+  | `:query`      | returns a vector of results
+  | `:query-one`  | returns a single results (or nil)
+
+  The function accepts the following options:
 
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
   ([]
-   (create-query nil))
+   (compile nil))
   ([{:keys [row key] :or {key (unqualified-key)}}]
    (let [cache (java.util.HashMap.) ;; TODO: bounded & inspectable
          ->row (fn [sql rs]
@@ -179,32 +189,59 @@
                              :else (rs->map-of-cols cols))]
                    (.put cache sql row)
                    row))]
-     (fn query
-       [^Connection connection sqlvec]
-       (let [sql (get-sql sqlvec)
-             params (get-params sqlvec)
-             ps (.prepareStatement connection sql)]
-         (try
-           (prepare! ps params)
-           (let [rs (.executeQuery ps)
-                 row (or (.get cache sql) (->row sql rs))]
-             (loop [res []]
-               (if (.next rs)
-                 (recur (conj res (row rs)))
-                 res)))
-           (finally
-             (.close ps))))))))
+     (->CompiledQueries
+       (fn query
+         [^Connection connection sqlvec]
+         (let [sql (get-sql sqlvec)
+               params (get-params sqlvec)
+               ps (.prepareStatement connection sql)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)
+                   row (or (.get cache sql) (->row sql rs))]
+               (loop [res []]
+                 (if (.next rs)
+                   (recur (conj res (row rs)))
+                   res)))
+             (finally
+               (.close ps)))))
+       (fn query
+         [^Connection connection sqlvec]
+         (let [sql (get-sql sqlvec)
+               params (get-params sqlvec)
+               ps (.prepareStatement connection sql)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)
+                   row (or (.get cache sql) (->row sql rs))]
+               (if (.next rs) (row rs)))
+             (finally
+               (.close ps)))))))))
 
 (defn query
-  "Creates and executes a query, accepting the following options:
+  "Creates and executes a compiled query, accepting the following options:
 
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
   ([^Connection connection sqlvec]
-   (let [query (create-query nil)]
+   (let [query (.query (compile nil))]
      (query connection sqlvec)))
   ([^Connection connection sqlvec opts]
-   (let [query (create-query opts)]
+   (let [query (.query (compile opts))]
+     (query connection sqlvec))))
+
+(defn query-one
+  "Creates and executes a compiled query-one, accepting the following options:
+
+  | key           | description |
+  | --------------|-------------|
+  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
+  ([^Connection connection sqlvec]
+   (let [query (.query_one (compile nil))]
+     (query connection sqlvec)))
+  ([^Connection connection sqlvec opts]
+   (let [query (.query_one (compile opts))]
      (query connection sqlvec))))

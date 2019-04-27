@@ -14,21 +14,16 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
-`porsas` provides tools for precompiing the functions for converting `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
+`porsas` provides tools for precompiling the functions for converting `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
 
-Query functions take either a plain SQL String or a vector of SQL String and parameters.
+`porsas.core/compile` returns a `CompiledQueries` record containing query functions of type `Connection sql-vec => result`. The following functions are compiled:
 
-### A Java JDBC query
+| key           | description |
+| --------------|-------------|
+| `:query`      | returns a vector of results
+| `:query-one`  | returns a single results (or nil)
 
-```clj
-;; 630ns
-(title "java")
-(bench! (java-query connection "SELECT * FROM fruit"))
-```
-
-### Compiled query functions
-
-`create-query` return query function, which compiles and memoizes fast Clojure code for each unique SQL query string. It takes the following options:
+`porsas.core/compile` accepts the following options:
 
 | key           | description |
 | --------------|-------------|
@@ -37,8 +32,20 @@ Query functions take either a plain SQL String or a vector of SQL String and par
 
 Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at runtime, which might not supported in all platforms like [GraalVM](https://www.graalvm.org/).
 
+### Examples
+
+#### A Java JDBC query
+
 ```clj
-(def query (p/create-query {:row (p/rs->map)}))
+;; 630ns
+(title "java")
+(bench! (java-query connection "SELECT * FROM fruit"))
+```
+
+#### Compiled query functions
+
+```clj
+(def query (:query (p/create-query {:row (p/rs->map)})))
 
 ;; 630ns
 (title "porsas: compiled & cached query")
@@ -50,7 +57,7 @@ Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at
 With defaults, a bit slower (non-compiled) mapper is used. Works on all platforms.
 
 ```clj
-(def query (p/create-query))
+(def query (:query (p/create-query)))
 
 ;; 1400ns
 (title "porsas: cached query")
