@@ -36,7 +36,7 @@
 
   PersistentVector
   (get-sql [this] (nth this 0))
-  (get-params [this] (nth this 1 nil)))
+  (get-params [this] (subvec this 1)))
 
 ;;
 ;; Implementation
