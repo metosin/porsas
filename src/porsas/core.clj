@@ -4,7 +4,8 @@
   (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (java.lang.reflect Field)
            (javax.sql DataSource)
-           (clojure.lang PersistentVector)))
+           (clojure.lang PersistentVector)
+           (java.util Iterator)))
 
 (declare unqualified-key)
 
@@ -25,18 +26,22 @@
   DataSource
   (get-connection [this] (.getConnection this)))
 
-(defprotocol SQLAndParams
-  (get-sql [this])
-  (get-params [this]))
+(defprotocol SQLParams
+  (-get-sql [this])
+  (-get-parameter-iterator [this]))
 
-(extend-protocol SQLAndParams
+(extend-protocol SQLParams
   String
-  (get-sql [this] this)
-  (get-params [_])
+  (-get-sql [this] this)
+  (-get-parameter-iterator [_])
 
   PersistentVector
-  (get-sql [this] (nth this 0))
-  (get-params [this] (subvec this 1)))
+  (-get-sql [this] (nth this 0))
+  (-get-parameter-iterator [this]
+    (let [it (.iterator this)]
+      (when (.hasNext it)
+        (.next it)
+        it))))
 
 (defrecord CompiledQueries [query query-one])
 
@@ -104,13 +109,12 @@
   (loop [i 1, acc [], [n & ns] (get-column-names rs key)]
     (if n (recur (inc i) (conj acc [i n]) ns) acc)))
 
-(defn- prepare! [^PreparedStatement ps params]
-  (when params
-    (let [it (clojure.lang.RT/iter params)]
-      (loop [i 1]
-        (when (.hasNext it)
-          (.setObject ps i (.next it))
-          (recur (inc i)))))))
+(defn- prepare! [^PreparedStatement ps ^Iterator it]
+  (when it
+    (loop [i 1]
+      (when (.hasNext it)
+        (.setObject ps i (.next it))
+        (recur (inc i))))))
 
 ;;
 ;; key
@@ -192,11 +196,11 @@
      (->CompiledQueries
        (fn query
          [^Connection connection sqlvec]
-         (let [sql (get-sql sqlvec)
-               params (get-params sqlvec)
+         (let [sql (-get-sql sqlvec)
+               it (-get-parameter-iterator sqlvec)
                ps (.prepareStatement connection sql)]
            (try
-             (prepare! ps params)
+             (prepare! ps it)
              (let [rs (.executeQuery ps)
                    row (or (.get cache sql) (->row sql rs))]
                (loop [res []]
@@ -207,8 +211,8 @@
                (.close ps)))))
        (fn query
          [^Connection connection sqlvec]
-         (let [sql (get-sql sqlvec)
-               params (get-params sqlvec)
+         (let [sql (-get-sql sqlvec)
+               params (-get-parameter-iterator sqlvec)
                ps (.prepareStatement connection sql)]
            (try
              (prepare! ps params)

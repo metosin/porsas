@@ -21,7 +21,7 @@
   `(do
      (when *show-response*
        (println "\u001B[33m")
-       (clojure.pprint/pprint ~@body)
+       (clojure.pprint/pprint ~body)
        (print "\u001B[0m"))
      (let [results# (cc/quick-benchmark ~body nil)]
        (println)

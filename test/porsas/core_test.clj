@@ -8,7 +8,8 @@
             [clojure.string :as str]
             [criterium.core :as cc])
   (:import (java.sql ResultSet Connection)
-           (java.util HashMap)))
+           (java.util HashMap)
+           (clojure.lang PersistentArrayMap PersistentVector)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
 (def ^Connection connection (j/get-connection db))
@@ -116,9 +117,18 @@
   (title "java.jdbc")
   (bench! (j/query {:connection connection} ["SELECT * FROM fruit"])))
 
+(defn perf-test-one []
+  (let [{:keys [query-one]} (p/compile {:row (p/rs->map)})]
+    (title "porsas: compiled query")
+    (bench! (query-one connection ["SELECT * FROM fruit where appearance = ? " "red"]))))
+
 (comment
+
   (binding [*show-results* false, *show-response* false]
-    (perf-test)))
+    (perf-test))
+
+  (binding [*show-results* false, *show-response* true]
+    (perf-test-one)))
 
 (comment
   (let [meta (.getMetaData (.executeQuery (.prepareStatement connection "select * from fruit")))]
