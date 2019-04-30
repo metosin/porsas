@@ -10,7 +10,7 @@
         :url "https://github.com/metosin/porsas"}
   :dependencies []
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
-                   :dependencies [[org.clojure/clojure "1.10.0"]
+                   :dependencies [[org.clojure/clojure "1.10.1-beta2"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.3.0"]
                                   [com.h2database/h2 "1.4.197"]
                                   [seancorfield/next.jdbc "1.0.0-alpha11"]
