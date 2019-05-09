@@ -118,9 +118,19 @@
   (bench! (j/query {:connection connection} ["SELECT * FROM fruit"])))
 
 (defn perf-test-one []
+
+  ;; 340ns
   (let [{:keys [query-one]} (p/compile {:row (p/rs->map)})]
     (title "porsas: compiled query")
-    (bench! (query-one connection ["SELECT * FROM fruit where appearance = ? " "red"]))))
+    (bench! (query-one connection ["SELECT * FROM fruit where appearance = ? " "red"])))
+
+  ;; 1800ns
+  (title "next.jdbc")
+  (bench! (jdbc/execute-one! connection ["SELECT * FROM fruit where appearance = ? " "red"]))
+
+  ;; 4500ns
+  (title "java.jdbc")
+  (bench! (j/query {:connection connection} ["SELECT * FROM fruit where appearance = ? " "red"] {:result-set-fn first})))
 
 (comment
 
