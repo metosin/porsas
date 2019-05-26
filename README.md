@@ -14,7 +14,7 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
-`porsas` provides tools for precompiling the functions to convert `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
+`porsas` provides tools for precompiling the functions to convert `ResultSet` into Clojure values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
 
 ```clj
 (defprotocol DataMapper
@@ -81,7 +81,6 @@ At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.
 ## TODO
 
 * more tests
-* bounded cache for statement memoization
 * batch-api
 * async-api for postgresql?
 
