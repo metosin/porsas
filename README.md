@@ -14,16 +14,16 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 ## Usage
 
-`porsas` provides tools for precompiling the functions for converting `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
+`porsas` provides tools for precompiling the functions to convert `ResultSet` into `EDN` values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
 
-`porsas.core/compile` returns a `CompiledQueries` record containing query functions of type `Connection sql-vec => result`. The following functions are compiled:
+```clj
+(defprotocol DataMapper
+  (cache [this])
+  (query-one [this ^Connection connection sqlvec])
+  (query [this ^Connection connection sqlvec]))
+```
 
-| key           | description |
-| --------------|-------------|
-| `:query`      | returns a vector of results
-| `:query-one`  | returns a single results (or nil)
-
-`porsas.core/compile` accepts the following options:
+`porsas.core/compile` returns a `porsas.core/DataMapper` instance. The following options are available for the compiler:
 
 | key           | description |
 | --------------|-------------|
@@ -45,11 +45,11 @@ Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at
 #### Compiled query functions
 
 ```clj
-(def query (:query (p/create-query {:row (p/rs->map)})))
+(def mapper (p/compile {:row (p/rs->map)}))
 
 ;; 630ns
 (title "porsas: compiled & cached query")
-(bench! (query connection "SELECT * FROM fruit")))
+(bench! (p/query mapper connection "SELECT * FROM fruit")))
 ```
 
 ### Cached query functions
@@ -57,21 +57,19 @@ Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at
 With defaults, a bit slower (non-compiled) mapper is used. Works on all platforms.
 
 ```clj
-(def query (:query (p/create-query)))
-
-;; 1400ns
+;; 1300ns
 (title "porsas: cached query")
-(bench! (query connection "SELECT * FROM fruit")))
+(bench! (p/query p/default-mapper connection "SELECT * FROM fruit")))
 ```
 
 ### Fully Dynamic queries
 
-`p/query` works just like `query`, but doesn't use any cache.
-
 ```clj
-;; 2100ns
+(def mapper (p/compile {:cache nil)}))
+
+;; 1500ns
 (title "porsas: dynamic query")
-(bench! (p/query connection "SELECT * FROM fruit"))
+(bench! (p/query mapper connection "SELECT * FROM fruit"))
 ```
 
 ## Performance

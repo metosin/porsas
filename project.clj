@@ -11,12 +11,12 @@
   :dependencies []
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
                    :dependencies [[org.clojure/clojure "1.10.1-beta2"]
-                                  [com.clojure-goes-fast/clj-async-profiler "0.3.0"]
-                                  [com.h2database/h2 "1.4.197"]
-                                  [seancorfield/next.jdbc "1.0.0-alpha11"]
+                                  [com.clojure-goes-fast/clj-async-profiler "0.3.1"]
+                                  [com.h2database/h2 "1.4.199"]
+                                  [seancorfield/next.jdbc "1.0.0-beta1"]
                                   [funcool/clojure.jdbc "0.9.0"]
                                   [org.clojure/java.jdbc "0.7.9"]
-                                  [criterium "0.4.4"]]}
+                                  [criterium "0.4.5"]]}
              :perf {:jvm-opts ^:replace ["-server"
                                          "-Xmx4096m"
                                          "-Dclojure.compiler.direct-linking=true"]}}

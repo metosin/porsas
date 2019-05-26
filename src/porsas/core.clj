@@ -5,7 +5,7 @@
            (java.lang.reflect Field)
            (javax.sql DataSource)
            (clojure.lang PersistentVector)
-           (java.util Iterator)))
+           (java.util Iterator Map)))
 
 (declare unqualified-key)
 
@@ -43,7 +43,10 @@
         (.next it)
         it))))
 
-(defrecord CompiledQueries [query query-one])
+(defprotocol DataMapper
+  (cache [this])
+  (query-one [this ^Connection connection sqlvec])
+  (query [this ^Connection connection sqlvec]))
 
 ;;
 ;; Implementation
@@ -166,86 +169,52 @@
 ;; Queries
 ;;
 
-(defn ^CompiledQueries compile
-  "Returns a [[CompiledQueries]] record containing query functions of type
-  `Connection sql-vec => result`. The following functions are compiled:
-
-  | key           | description |
-  | --------------|-------------|
-  | `:query`      | returns a vector of results
-  | `:query-one`  | returns a single results (or nil)
-
-  The function accepts the following options:
+(defn ^DataMapper compile
+  "Returns a [[DataMapper]] instance from options map:
 
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
-  ([]
-   (compile nil))
-  ([{:keys [row key] :or {key (unqualified-key)}}]
-   (let [cache (java.util.HashMap.) ;; TODO: bounded & inspectable
-         ->row (fn [sql rs]
-                 (let [cols (col-map rs key)
-                       row (cond
-                             (satisfies? RowCompiler row) (compile-row row (map second cols))
-                             row row
-                             :else (rs->map-of-cols cols))]
-                   (.put cache sql row)
-                   row))]
-     (->CompiledQueries
-       (fn query
-         [^Connection connection sqlvec]
-         (let [sql (-get-sql sqlvec)
-               it (-get-parameter-iterator sqlvec)
-               ps (.prepareStatement connection sql)]
-           (try
-             (prepare! ps it)
-             (let [rs (.executeQuery ps)
-                   row (or (.get cache sql) (->row sql rs))]
-               (loop [res []]
-                 (if (.next rs)
-                   (recur (conj res (row rs)))
-                   res)))
-             (finally
-               (.close ps)))))
-       (fn query
-         [^Connection connection sqlvec]
-         (let [sql (-get-sql sqlvec)
-               params (-get-parameter-iterator sqlvec)
-               ps (.prepareStatement connection sql)]
-           (try
-             (prepare! ps params)
-             (let [rs (.executeQuery ps)
-                   row (or (.get cache sql) (->row sql rs))]
-               (if (.next rs) (row rs)))
-             (finally
-               (.close ps)))))))))
+  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
+  | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
+  [{:keys [row key cache] :or {key (unqualified-key)
+                               cache (java.util.HashMap.)}}]
+  (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
+        ->row (fn [sql rs]
+                (let [cols (col-map rs key)
+                      row (cond
+                            (satisfies? RowCompiler row) (compile-row row (map second cols))
+                            row row
+                            :else (rs->map-of-cols cols))]
+                  (.put ^Map cache sql row)
+                  row))]
+    (reify
+      DataMapper
+      (cache [_] (into {} cache))
+      (query-one [_ connection sqlvec]
+        (let [sql (-get-sql sqlvec)
+              params (-get-parameter-iterator sqlvec)
+              ps (.prepareStatement ^Connection connection sql)]
+          (try
+            (prepare! ps params)
+            (let [rs (.executeQuery ps)
+                  row (or (.get ^Map cache sql) (->row sql rs))]
+              (if (.next rs) (row rs)))
+            (finally
+              (.close ps)))))
+      (query [_ connection sqlvec]
+        (let [sql (-get-sql sqlvec)
+              it (-get-parameter-iterator sqlvec)
+              ps (.prepareStatement ^Connection connection sql)]
+          (try
+            (prepare! ps it)
+            (let [rs (.executeQuery ps)
+                  row (or (.get ^Map cache sql) (->row sql rs))]
+              (loop [res []]
+                (if (.next rs)
+                  (recur (conj res (row rs)))
+                  res)))
+            (finally
+              (.close ps))))))))
 
-(defn query
-  "Creates and executes a compiled query, accepting the following options:
-
-  | key           | description |
-  | --------------|-------------|
-  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
-  ([^Connection connection sqlvec]
-   (let [query (.query (compile nil))]
-     (query connection sqlvec)))
-  ([^Connection connection sqlvec opts]
-   (let [query (.query (compile opts))]
-     (query connection sqlvec))))
-
-(defn query-one
-  "Creates and executes a compiled query-one, accepting the following options:
-
-  | key           | description |
-  | --------------|-------------|
-  | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-  | `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
-  ([^Connection connection sqlvec]
-   (let [query (.query_one (compile nil))]
-     (query connection sqlvec)))
-  ([^Connection connection sqlvec opts]
-   (let [query (.query_one (compile opts))]
-     (query connection sqlvec))))
+(def default-mapper (compile nil))
