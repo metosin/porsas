@@ -1,5 +1,5 @@
-(defproject metosin/porsas "0.0.1-alpha4"
-  :description "Spike Lee for Fast DB-access"
+(defproject metosin/porsas "0.0.1-alpha5"
+  :description "Spike Lee for Fast DB-access with Clojure"
   :url "https://github.com/metosin/porsas"
   :deploy-repositories [["releases" :clojars]]
   :license {:name "Eclipse Public License"
