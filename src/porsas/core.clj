@@ -4,7 +4,7 @@
   (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (java.lang.reflect Field)
            (javax.sql DataSource)
-           (clojure.lang PersistentVector)
+           (clojure.lang PersistentVector PersistentArrayMap)
            (java.util Iterator Map)))
 
 (declare unqualified-key)
@@ -42,6 +42,14 @@
       (when (.hasNext it)
         (.next it)
         it))))
+
+(defprotocol GetValue
+  (get-value [this i]))
+
+(extend-protocol GetValue
+  ResultSet
+  (get-value [rs i]
+    (.getObject rs ^Integer i)))
 
 (defprotocol DataMapper
   (cache [this])
@@ -81,27 +89,27 @@
                   :->instance ~pctor
                   :map->instance ~mctor}))))))))
 
-(defn- rs->map-of-cols [cols]
+(defn ^:no-doc rs->map-of-cols [cols]
   (let [size (* 2 (count cols))]
-    (fn [^ResultSet rs]
+    (fn [rs]
       (let [a ^objects (make-array Object size)
             iter (clojure.lang.RT/iter cols)]
         (while (.hasNext iter)
           (let [v (.next iter)
-                i ^int (nth v 0)
-                i' (* 2 (dec i))]
-            (aset a i' (nth v 1))
-            (aset a (inc i') (.getObject rs ^Integer i))))
-        (clojure.lang.PersistentArrayMap. a)))))
+                to (* 2 ^int (nth v 1))
+                from ^int (nth v 0)]
+            (aset a to (nth v 2))
+            (aset a (inc to) (get-value rs from))))
+        (PersistentArrayMap. a)))))
 
-(defn- rs-> [pc fields]
+(defn ^:no-doc rs-> [start pc fields]
   (let [rs (gensym)
-        fm (zipmap fields (range 1 (inc (count fields))))]
+        fm (zipmap fields (range start (inc (count fields))))]
     (eval
-      `(fn [~(with-meta rs {:tag 'java.sql.ResultSet})]
+      `(fn [~rs]
          ~(if pc
-            `(~pc ~@(map (fn [[k v]] `(.getObject ~rs ~v)) fm))
-            (apply array-map (mapcat (fn [[k v]] [k `(.getObject ~rs ~v)]) fm)))))))
+            `(~pc ~@(map (fn [[_ v]] `(get-value ~rs ~v)) fm))
+            (apply array-map (mapcat (fn [[k v]] [k `(get-value ~rs ~v)]) fm)))))))
 
 (defn- get-column-names [^ResultSet rs key]
   (let [rsmeta (.getMetaData rs)
@@ -109,8 +117,8 @@
     (mapv (fn [^Integer i] (key rsmeta i)) idxs)))
 
 (defn- col-map [^ResultSet rs key]
-  (loop [i 1, acc [], [n & ns] (get-column-names rs key)]
-    (if n (recur (inc i) (conj acc [i n]) ns) acc)))
+  (loop [i 0, acc [], [n & ns] (get-column-names rs key)]
+    (if n (recur (inc i) (conj acc [(inc i) i n]) ns) acc)))
 
 (defn- prepare! [^PreparedStatement ps ^Iterator it]
   (when it
@@ -143,30 +151,33 @@
 ;; row
 ;;
 
-(defn rs->record [record]
-  (rs-> (constructor-symbol record) (record-fields record)))
+(defn rs->record
+  ([record]
+   (rs->record record nil))
+  ([record {:keys [start] :or {start 1}}]
+   (rs-> start (constructor-symbol record) (record-fields record))))
 
 (defn rs->compiled-record
   ([]
    (rs->compiled-record nil))
-  ([_]
+  ([{:keys [start] :or {start 1}}]
    (reify
      RowCompiler
      (compile-row [_ cols]
        (let [{:keys [->instance fields]} (memoized-compile-record cols)]
-         (rs-> ->instance fields))))))
+         (rs-> start ->instance fields))))))
 
 (defn rs->map
   ([]
    (rs->map nil))
-  ([_]
+  ([{:keys [start] :or {start 1}}]
    (reify
      RowCompiler
      (compile-row [_ cols]
-       (rs-> nil cols)))))
+       (rs-> start nil cols)))))
 
 ;;
-;; Queries
+;; DataMapper
 ;;
 
 (defn ^DataMapper compile
@@ -177,44 +188,45 @@
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
   | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
-  [{:keys [row key cache] :or {key (unqualified-key)
-                               cache (java.util.HashMap.)}}]
-  (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
-        ->row (fn [sql rs]
-                (let [cols (col-map rs key)
-                      row (cond
-                            (satisfies? RowCompiler row) (compile-row row (map second cols))
-                            row row
-                            :else (rs->map-of-cols cols))]
-                  (.put ^Map cache sql row)
-                  row))]
-    (reify
-      DataMapper
-      (cache [_] (into {} cache))
-      (query-one [_ connection sqlvec]
-        (let [sql (-get-sql sqlvec)
-              params (-get-parameter-iterator sqlvec)
-              ps (.prepareStatement ^Connection connection sql)]
-          (try
-            (prepare! ps params)
-            (let [rs (.executeQuery ps)
-                  row (or (.get ^Map cache sql) (->row sql rs))]
-              (if (.next rs) (row rs)))
-            (finally
-              (.close ps)))))
-      (query [_ connection sqlvec]
-        (let [sql (-get-sql sqlvec)
-              it (-get-parameter-iterator sqlvec)
-              ps (.prepareStatement ^Connection connection sql)]
-          (try
-            (prepare! ps it)
-            (let [rs (.executeQuery ps)
-                  row (or (.get ^Map cache sql) (->row sql rs))]
-              (loop [res []]
-                (if (.next rs)
-                  (recur (conj res (row rs)))
-                  res)))
-            (finally
-              (.close ps))))))))
+  ([] (compile {}))
+  ([{:keys [row key cache] :or {key (unqualified-key)
+                                cache (java.util.HashMap.)}}]
+   (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
+         ->row (fn [sql rs]
+                 (let [cols (col-map rs key)
+                       row (cond
+                             (satisfies? RowCompiler row) (compile-row row (map last cols))
+                             row row
+                             :else (rs->map-of-cols cols))]
+                   (.put ^Map cache sql row)
+                   row))]
+     (reify
+       DataMapper
+       (cache [_] (into {} cache))
+       (query-one [_ connection sqlvec]
+         (let [sql (-get-sql sqlvec)
+               params (-get-parameter-iterator sqlvec)
+               ps (.prepareStatement ^Connection connection sql)]
+           (try
+             (prepare! ps params)
+             (let [rs (.executeQuery ps)
+                   row (or (.get ^Map cache sql) (->row sql rs))]
+               (if (.next rs) (row rs)))
+             (finally
+               (.close ps)))))
+       (query [_ connection sqlvec]
+         (let [sql (-get-sql sqlvec)
+               it (-get-parameter-iterator sqlvec)
+               ps (.prepareStatement ^Connection connection sql)]
+           (try
+             (prepare! ps it)
+             (let [rs (.executeQuery ps)
+                   row (or (.get ^Map cache sql) (->row sql rs))]
+               (loop [res []]
+                 (if (.next rs)
+                   (recur (conj res (row rs)))
+                   res)))
+             (finally
+               (.close ps)))))))))
 
 (def default-mapper (compile nil))

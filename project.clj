@@ -8,7 +8,7 @@
             :comments "same as Clojure"}
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
-  :dependencies []
+  :dependencies [[io.reactiverse/reactive-pg-client "0.11.4"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
                    :dependencies [[org.clojure/clojure "1.10.1-beta2"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.3.1"]

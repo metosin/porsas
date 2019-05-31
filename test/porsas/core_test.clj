@@ -50,7 +50,7 @@
      (fn [^ResultSet rs opts]
        (let [sql (:next.jdbc/sql-string opts)
              ->row (or (.get cache sql)
-                       (let [->row (#'p/rs-> nil (map second (#'p/col-map rs key)))]
+                       (let [->row (p/rs-> 1 nil (map second (#'p/col-map rs key)))]
                          (.put cache sql ->row)
                          ->row))]
          (reify
