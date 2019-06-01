@@ -27,8 +27,8 @@
 
 (defprotocol DataMapper
   (cache [this])
-  (query-one [this ^PgPool pool sqlvec f])
-  (query [this ^PgPool pool sqlvec f]))
+  (query-one [this ^PgPool pool sqlvec respond raise])
+  (query [this ^PgPool pool sqlvec respond raise]))
 
 (defn- col-map [^PgRowSet rs]
   (loop [i 0, acc [], [n & ns] (mapv keyword (.columnsNames rs))]
@@ -97,7 +97,7 @@
      (reify
        DataMapper
        (cache [_] (into {} cache))
-       (query-one [_ pool sqlvec f]
+       (query-one [_ pool sqlvec respond raise]
          (let [sql (-get-sql sqlvec)
                params (-get-parameters sqlvec)]
            (.preparedQuery
@@ -111,9 +111,10 @@
                    (let [rs ^PgRowSet (.result ^AsyncResult res)
                          it (.iterator rs)]
                      (if-not (.hasNext it)
-                       (f nil)
+                       (respond nil)
                        (let [row (or (.get ^Map cache sql) (->row sql rs))]
-                         (f (row (.next it))))))))))))))))
+                         (respond (row (.next it))))))
+                   (raise (.cause ^AsyncResult res))))))))))))
 
 ;;
 ;; spike
@@ -134,7 +135,7 @@
 
 (def mapper (pa/data-mapper))
 
-(pa/query-one mapper pool ["SELECT id, randomnumber from WORLD where id=$1" 1] println)
+(pa/query-one mapper pool ["SELECT id, randomnumber from WORLD where id=$1" 1] println println)
 ; => {:id 1, :randomnumber 6233}
 )
 
