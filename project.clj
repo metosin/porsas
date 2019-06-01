@@ -1,4 +1,4 @@
-(defproject metosin/porsas "0.0.1-alpha7"
+(defproject metosin/porsas "0.0.1-alpha8"
   :description "Spike Lee for Fast DB-access with Clojure"
   :url "https://github.com/metosin/porsas"
   :deploy-repositories [["releases" :clojars]]
@@ -8,7 +8,8 @@
             :comments "same as Clojure"}
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
-  :dependencies [[io.reactiverse/reactive-pg-client "0.11.4"]]
+  :dependencies [[org.postgresql/postgresql "42.2.5"]
+                 [io.reactiverse/reactive-pg-client "0.11.4"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
                    :dependencies [[org.clojure/clojure "1.10.1-beta2"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.3.1"]

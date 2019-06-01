@@ -45,7 +45,7 @@ Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at
 #### Compiled query functions
 
 ```clj
-(def mapper (p/compile {:row (p/rs->map)}))
+(def mapper (p/data-mapper {:row (p/rs->map)}))
 
 ;; 630ns
 (title "porsas: compiled & cached query")
@@ -65,7 +65,7 @@ With defaults, a bit slower (non-compiled) mapper is used. Works on all platform
 ### Fully Dynamic queries
 
 ```clj
-(def mapper (p/compile {:cache nil)}))
+(def mapper (p/data-mapper {:cache nil)}))
 
 ;; 1500ns
 (title "porsas: dynamic query")

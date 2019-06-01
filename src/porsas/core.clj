@@ -1,5 +1,4 @@
 (ns porsas.core
-  (:refer-clojure :exclude [compile])
   (:require [clojure.string :as str])
   (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (java.lang.reflect Field)
@@ -180,7 +179,7 @@
 ;; DataMapper
 ;;
 
-(defn ^DataMapper compile
+(defn ^DataMapper data-mapper
   "Returns a [[DataMapper]] instance from options map:
 
   | key           | description |
@@ -229,4 +228,4 @@
              (finally
                (.close ps)))))))))
 
-(def default-mapper (compile nil))
+(def default-mapper (data-mapper nil))
