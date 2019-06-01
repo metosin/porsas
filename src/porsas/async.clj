@@ -38,10 +38,10 @@
 ;; pool
 ;;
 
-(defn ^PgPool pool [{:keys [database host port user password size]}]
+(defn ^PgPool pool [{:keys [uri database host port user password size]}]
   (PgClient/pool
     ^PgPoolOptions
-    (cond-> (PgPoolOptions.)
+    (cond-> (if uri (PgPoolOptions/fromUri uri) (PgPoolOptions.))
             database (.setDatabase ^String database)
             host (.setHost ^String host)
             port (.setPort ^Integer port)
@@ -119,6 +119,8 @@
 ;; spike
 ;;
 
+(comment
+
 (ns async
   (:require [porsas.async :as pa]))
 
@@ -134,6 +136,7 @@
 
 (pa/query-one mapper pool ["SELECT id, randomnumber from WORLD where id=$1" 1] println)
 ; => {:id 1, :randomnumber 6233}
+)
 
 (comment
   (defn queryz [[sql & params] f]

@@ -17,7 +17,7 @@
   (compile-row [this cols]))
 
 (defprotocol GetConnection
-  (get-connection [this]))
+  (^java.sql.Connection get-connection [this]))
 
 (extend-protocol GetConnection
   Connection
