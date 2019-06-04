@@ -4,7 +4,8 @@
            (io.reactiverse.pgclient.impl ArrayTuple RowImpl)
            (io.vertx.core Handler AsyncResult)
            (java.util Collection HashMap Map)
-           (clojure.lang PersistentVector)))
+           (clojure.lang PersistentVector)
+           (java.util.concurrent CompletableFuture)))
 
 (defprotocol SQLParams
   (-get-sql [this])
@@ -27,8 +28,8 @@
 
 (defprotocol DataMapper
   (cache [this])
-  (query-one [this ^PgPool pool sqlvec respond raise])
-  (query [this ^PgPool pool sqlvec respond raise]))
+  (^java.util.concurrent.CompletableFuture query-one [this ^PgPool pool sqlvec])
+  (^java.util.concurrent.CompletableFuture query [this ^PgPool pool sqlvec]))
 
 (defn- col-map [^PgRowSet rs]
   (loop [i 0, acc [], [n & ns] (mapv keyword (.columnsNames rs))]
@@ -41,7 +42,7 @@
 (defn ^PgPool pool [{:keys [uri database host port user password size]}]
   (PgClient/pool
     ^PgPoolOptions
-    (cond-> (if uri (PgPoolOptions/fromUri uri) (PgPoolOptions.))
+    (cond-> (if uri (PgPoolOptions/fromUri ^String uri) (PgPoolOptions.))
             database (.setDatabase ^String database)
             host (.setHost ^String host)
             port (.setPort ^Integer port)
@@ -97,9 +98,10 @@
      (reify
        DataMapper
        (cache [_] (into {} cache))
-       (query-one [_ pool sqlvec respond raise]
+       (query-one [_ pool sqlvec]
          (let [sql (-get-sql sqlvec)
-               params (-get-parameters sqlvec)]
+               params (-get-parameters sqlvec)
+               cf (CompletableFuture.)]
            (.preparedQuery
              ^PgPool pool
              ^String sql
@@ -111,35 +113,35 @@
                    (let [rs ^PgRowSet (.result ^AsyncResult res)
                          it (.iterator rs)]
                      (if-not (.hasNext it)
-                       (respond nil)
+                       (.complete cf nil)
                        (let [row (or (.get ^Map cache sql) (->row sql rs))]
-                         (respond (row (.next it))))))
-                   (raise (.cause ^AsyncResult res))))))))))))
+                         (.complete cf (row (.next it))))))
+                   (.completeExceptionally cf (.cause ^AsyncResult res))))))
+           cf))))))
 
 ;;
 ;; spike
 ;;
 
 (comment
+  (ns async)
+  (require '[porsas.async :as pa])
+  (require '[promesa.core :as p])
 
-(ns async
-  (:require [porsas.async :as pa]))
+  (def pool
+    (pa/pool
+      {:uri "postgresql://localhost:5432/hello_world"
+       :user "benchmarkdbuser"
+       :password "benchmarkdbpass"}))
 
-(def pool (pa/pool
-            {:database "hello_world"
-             :host "localhost"
-             :port 5432
-             :user "benchmarkdbuser"
-             :password "benchmarkdbpass"
-             :size 1}))
+  (def mapper (pa/data-mapper))
 
-(def mapper (pa/data-mapper))
+  (-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
+      (p/chain :randomnumber inc inc)
+      (p/bind println))
+  ; => #<Promise[~]>
+  ; prints 2839
 
-(pa/query-one mapper pool ["SELECT id, randomnumber from WORLD where id=$1" 1] println println)
-; => {:id 1, :randomnumber 6233}
-)
-
-(comment
   (defn queryz [[sql & params] f]
     (.preparedQuery
       pool

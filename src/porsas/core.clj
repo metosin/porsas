@@ -115,7 +115,7 @@
         idxs (range 1 (inc (.getColumnCount rsmeta)))]
     (mapv (fn [^Integer i] (key rsmeta i)) idxs)))
 
-(defn- col-map [^ResultSet rs key]
+(defn ^:no-doc col-map [^ResultSet rs key]
   (loop [i 0, acc [], [n & ns] (get-column-names rs key)]
     (if n (recur (inc i) (conj acc [(inc i) i n]) ns) acc)))
 

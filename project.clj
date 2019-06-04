@@ -12,7 +12,8 @@
                  [io.reactiverse/reactive-pg-client "0.11.4"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
                    :dependencies [[org.clojure/clojure "1.10.1-beta2"]
-                                  [com.clojure-goes-fast/clj-async-profiler "0.3.1"]
+                                  [com.clojure-goes-fast/clj-async-profiler "0.4.0"]
+                                  [funcool/promesa "2.0.0"]
                                   [com.h2database/h2 "1.4.199"]
                                   [seancorfield/next.jdbc "1.0.0-beta1"]
                                   [funcool/clojure.jdbc "0.9.0"]
