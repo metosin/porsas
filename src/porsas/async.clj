@@ -27,7 +27,6 @@
     (.getValue rs ^Integer i)))
 
 (defprotocol DataMapper
-  (cache [this])
   (^java.util.concurrent.CompletableFuture query-one [this ^PgPool pool sqlvec])
   (^java.util.concurrent.CompletableFuture query [this ^PgPool pool sqlvec]))
 
@@ -96,8 +95,9 @@
                    (.put ^Map cache sql row)
                    row))]
      (reify
-       DataMapper
+       p/Cached
        (cache [_] (into {} cache))
+       DataMapper
        (query-one [_ pool sqlvec]
          (let [sql (-get-sql sqlvec)
                params (-get-parameters sqlvec)

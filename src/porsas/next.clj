@@ -17,6 +17,8 @@
                          (.put cache sql ->row)
                          ->row))]
          (reify
+           p/Cached
+           (cache [_] (into {} cache))
            rs/RowBuilder
            (->row [_] (->row rs))
            (with-column [_ row _] row)

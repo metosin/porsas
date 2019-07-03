@@ -50,8 +50,10 @@
   (get-value [rs i]
     (.getObject rs ^Integer i)))
 
+(defprotocol Cached
+  (cache [this]))
+
 (defprotocol DataMapper
-  (cache [this])
   (query-one [this ^Connection connection sqlvec])
   (query [this ^Connection connection sqlvec]))
 
@@ -200,8 +202,9 @@
                    (.put ^Map cache sql row)
                    row))]
      (reify
-       DataMapper
+       Cached
        (cache [_] (into {} cache))
+       DataMapper
        (query-one [_ connection sqlvec]
          (let [sql (-get-sql sqlvec)
                params (-get-parameter-iterator sqlvec)
