@@ -2,10 +2,11 @@
   (:require [porsas.core :as p])
   (:import (io.reactiverse.pgclient PgClient PgPoolOptions Tuple PgPool PgRowSet)
            (io.reactiverse.pgclient.impl ArrayTuple RowImpl)
-           (io.vertx.core Handler AsyncResult)
+           (io.vertx.core Vertx Handler AsyncResult)
            (java.util Collection HashMap Map)
            (clojure.lang PersistentVector)
-           (java.util.concurrent CompletableFuture)))
+           (java.util.concurrent CompletableFuture Executor)
+           (java.util.function Function)))
 
 (defprotocol SQLParams
   (-get-sql [this])
@@ -38,17 +39,20 @@
 ;; pool
 ;;
 
-(defn ^PgPool pool [{:keys [uri database host port user password size]}]
-  (PgClient/pool
-    ^PgPoolOptions
-    (cond-> (if uri (PgPoolOptions/fromUri ^String uri) (PgPoolOptions.))
-            database (.setDatabase ^String database)
-            host (.setHost ^String host)
-            port (.setPort ^Integer port)
-            user (.setUser ^String user)
-            password (.setPassword ^String password)
-            true (.setCachePreparedStatements true)
-            size (.setMaxSize ^Integer size))))
+(defn ^PgPool pool [{:keys [uri database host port user password pipelining-limit size]}]
+  (let [vertx (Vertx/vertx)]
+    (PgClient/pool
+      vertx
+      ^PgPoolOptions
+      (cond-> (if uri (PgPoolOptions/fromUri ^String uri) (PgPoolOptions.))
+              database (.setDatabase ^String database)
+              host (.setHost ^String host)
+              port (.setPort ^Integer port)
+              user (.setUser ^String user)
+              password (.setPassword ^String password)
+              true (.setCachePreparedStatements true)
+              pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)
+              size (.setMaxSize ^Integer size)))))
 
 ;;
 ;; row
@@ -120,13 +124,36 @@
            cf))))))
 
 ;;
+;; utils
+;;
+
+(defn then [^CompletableFuture cf f]
+  (.thenApply cf (reify Function
+                   (apply [_ response]
+                     (f response)))))
+
+(defn then-async
+  ([^CompletableFuture cf f]
+   (.thenApplyAsync cf (reify Function
+                         (apply [_ response]
+                           (f response)))))
+  ([^CompletableFuture cf f ^Executor executor]
+   (.thenApplyAsync cf (reify Function
+                         (apply [_ response]
+                           (f response))) executor)))
+
+(defn catch [^CompletableFuture cf f]
+  (.exceptionally cf (reify Function
+                       (apply [_ exception]
+                         (f exception)))))
+
+;;
 ;; spike
 ;;
 
 (comment
   (ns async)
   (require '[porsas.async :as pa])
-  (require '[promesa.core :as p])
 
   (def pool
     (pa/pool
@@ -137,8 +164,8 @@
   (def mapper (pa/data-mapper))
 
   (-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
-      (p/chain :randomnumber inc inc)
-      (p/bind println))
+      (pa/then :randomnumber)
+      (deref))
   ; => #<Promise[~]>
   ; prints 2839
 
