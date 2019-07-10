@@ -4,7 +4,7 @@
 
 > Nopea kuin sika pakkasella
 
-Spike to see how fast we can go with Clojure + JDBC. Highly Experimental.
+Spike to see how fast we can go with both Clojure + JDBC & Async SQL. Highly Experimental.
 
 Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
