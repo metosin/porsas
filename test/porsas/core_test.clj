@@ -1,5 +1,5 @@
 (ns porsas.core-test
-  (:require [porsas.core :as p]
+  (:require [porsas.jdbc :as pj]
             [porsas.next :as pn]
             [porsas.perf-utils :refer :all]
             [clojure.java.jdbc :as j]
@@ -7,8 +7,7 @@
             [jdbc.core :as funcool]
             [clojure.string :as str]
             [criterium.core :as cc])
-  (:import (java.sql ResultSet Connection)
-           (java.util HashMap)))
+  (:import (java.sql ResultSet Connection)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
 (def ^Connection connection (j/get-connection db))
@@ -48,33 +47,33 @@
   (bench! (java-query connection "SELECT * FROM fruit"))
 
   ;; 840ns
-  (let [mapper (p/data-mapper {:row (p/rs->map)})]
+  (let [mapper (pj/data-mapper {:row (pj/rs->map)})]
     (title "porsas: compiled query")
-    (bench! (p/query mapper connection "SELECT * FROM fruit")))
+    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
 
   ;; 830ns
-  (let [mapper (p/data-mapper {:row rs->Fruit})]
+  (let [mapper (pj/data-mapper {:row rs->Fruit})]
     (title "porsas: hand-written")
-    (bench! (p/query mapper connection "SELECT * FROM fruit")))
+    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
 
   ;; 810ns
-  (let [mapper (p/data-mapper {:row (p/rs->record Fruit)})]
+  (let [mapper (pj/data-mapper {:row (pj/rs->record Fruit)})]
     (title "porsas: inferred from record")
-    (bench! (p/query mapper connection "SELECT * FROM fruit")))
+    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
 
   ;; 780ns
-  (let [mapper (p/data-mapper {:row (p/rs->compiled-record)})]
+  (let [mapper (pj/data-mapper {:row (pj/rs->compiled-record)})]
     (title "porsas: compiled record")
-    (bench! (p/query mapper connection "SELECT * FROM fruit")))
+    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
 
   ;; 1700ns
   (title "porsas: cached query")
-  (bench! (p/query p/default-mapper connection "SELECT * FROM fruit"))
+  (bench! (pj/query pj/default-mapper connection "SELECT * FROM fruit"))
 
   ;; 2400ns
   (title "porsas: dynamic query")
-  (let [mapper (p/data-mapper {:cache nil})]
-    (bench! (p/query mapper connection "SELECT * FROM fruit")))
+  (let [mapper (pj/data-mapper {:cache nil})]
+    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
 
   ;; 1700ns
   (title "next.jdbc: porsas compiled")
@@ -96,9 +95,9 @@
 (defn perf-test-one []
 
   ;; 480ns
-  (let [mapper (p/data-mapper {:row (p/rs->map)})]
+  (let [mapper (pj/data-mapper {:row (pj/rs->map)})]
     (title "porsas: compiled query")
-    (bench! (p/query-one mapper connection ["SELECT * FROM fruit where appearance = ? " "red"])))
+    (bench! (pj/query-one mapper connection ["SELECT * FROM fruit where appearance = ? " "red"])))
 
   ;; 1890ns
   (title "next.jdbc")
@@ -128,8 +127,8 @@
       (println "    type:" (.getColumnTypeName meta i))
       (println "   class:" (.getColumnClassName meta i))
       (println)
-      (println "     key:" ((p/unqualified-key str/lower-case) meta i))
-      (println "    qkey:" ((p/qualified-key str/lower-case) meta i))
+      (println "     key:" ((pj/unqualified-key str/lower-case) meta i))
+      (println "    qkey:" ((pj/qualified-key str/lower-case) meta i))
       (println))))
 
 (comment

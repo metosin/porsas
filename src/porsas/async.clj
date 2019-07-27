@@ -5,7 +5,7 @@
            (io.vertx.core Vertx Handler AsyncResult VertxOptions)
            (java.util Collection HashMap Map)
            (clojure.lang PersistentVector)
-           (java.util.concurrent CompletableFuture Executor)
+           (java.util.concurrent CompletableFuture Executor CompletionStage)
            (java.util.function Function)))
 
 (defprotocol SQLParams
@@ -28,8 +28,8 @@
     (.getValue rs ^Integer i)))
 
 (defprotocol DataMapper
-  (^java.util.concurrent.CompletableFuture query-one [this ^PgPool pool sqlvec])
-  (^java.util.concurrent.CompletableFuture query [this ^PgPool pool sqlvec]))
+  (^java.util.concurrent.CompletionStage query-one [this ^PgPool pool sqlvec])
+  (^java.util.concurrent.CompletionStage query [this ^PgPool pool sqlvec]))
 
 (defn- col-map [^PgRowSet rs]
   (loop [i 0, acc [], [n & ns] (mapv keyword (.columnsNames rs))]
@@ -153,68 +153,22 @@
 ;; utils
 ;;
 
-(defn then [^CompletableFuture cf f]
+(defn then [^CompletionStage cf f]
   (.thenApply cf (reify Function
                    (apply [_ response]
                      (f response)))))
 
 (defn then-async
-  ([^CompletableFuture cf f]
+  ([^CompletionStage cf f]
    (.thenApplyAsync cf (reify Function
                          (apply [_ response]
                            (f response)))))
-  ([^CompletableFuture cf f ^Executor executor]
+  ([^CompletionStage cf f ^Executor executor]
    (.thenApplyAsync cf (reify Function
                          (apply [_ response]
                            (f response))) executor)))
 
-(defn catch [^CompletableFuture cf f]
+(defn catch [^CompletionStage cf f]
   (.exceptionally cf (reify Function
                        (apply [_ exception]
                          (f exception)))))
-
-;;
-;; spike
-;;
-
-(comment
-  (ns async)
-  (require '[porsas.async :as pa])
-
-  (def pool
-    (pa/pool
-      {:uri "postgresql://localhost:5432/hello_world"
-       :user "benchmarkdbuser"
-       :password "benchmarkdbpass"}))
-
-  (def mapper (pa/data-mapper))
-
-  (pmap
-    (fn [_] (-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
-                (pa/then :randomnumber)
-                (deref))) (range 1000))
-  ; => #<Promise[~]>
-  ; prints 2839
-
-  (defn queryz [[sql & params] f]
-    (.preparedQuery
-      pool
-      ^String sql
-      (ArrayTuple. ^Collection params)
-      (reify
-        Handler
-        (handle [_ res]
-          (if (.succeeded ^AsyncResult res)
-            (let [rs ^PgRowSet (.result ^AsyncResult res)
-                  it (.iterator rs)]
-              #_(prn (into [] (.columnsNames rs)))
-              (if-not (.hasNext it)
-                (f nil)
-                (f (.next it)))))))))
-
-  (queryz
-    ["SELECT id, randomnumber from WORLD where id=$1" 1]
-    (fn [row]
-      (println
-        {:id (.getValue ^Tuple row 0)
-         :randomnumber (.getValue ^Tuple row 1)}))))
