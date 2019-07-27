@@ -2,7 +2,7 @@
   (:require [porsas.core :as p])
   (:import (io.reactiverse.pgclient PgClient PgPoolOptions Tuple PgPool PgRowSet)
            (io.reactiverse.pgclient.impl ArrayTuple RowImpl)
-           (io.vertx.core Vertx Handler AsyncResult)
+           (io.vertx.core Vertx Handler AsyncResult VertxOptions)
            (java.util Collection HashMap Map)
            (clojure.lang PersistentVector)
            (java.util.concurrent CompletableFuture Executor)
@@ -36,23 +36,29 @@
     (if n (recur (inc i) (conj acc [i i n]) ns) acc)))
 
 ;;
-;; pool
+;; pooling
 ;;
 
-(defn ^PgPool pool [{:keys [uri database host port user password pipelining-limit size]}]
-  (let [vertx (Vertx/vertx)]
-    (PgClient/pool
-      vertx
-      ^PgPoolOptions
-      (cond-> (if uri (PgPoolOptions/fromUri ^String uri) (PgPoolOptions.))
-              database (.setDatabase ^String database)
-              host (.setHost ^String host)
-              port (.setPort ^Integer port)
-              user (.setUser ^String user)
-              password (.setPassword ^String password)
-              true (.setCachePreparedStatements true)
-              pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)
-              size (.setMaxSize ^Integer size)))))
+(defn ^Vertx vertx []
+  (Vertx/vertx (.setPreferNativeTransport (VertxOptions.) true)))
+
+(defn ^PgPoolOptions options [{:keys [uri database host port user password pipelining-limit size]}]
+  (cond-> (if uri (PgPoolOptions/fromUri ^String uri) (PgPoolOptions.))
+          database (.setDatabase ^String database)
+          host (.setHost ^String host)
+          port (.setPort ^Integer port)
+          user (.setUser ^String user)
+          password (.setPassword ^String password)
+          true (.setCachePreparedStatements true)
+          pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)
+          size (.setMaxSize ^Integer size)))
+
+(defn ^PgPool pool
+  ([options]
+   (pool (vertx) options))
+  ([vertx opts]
+   (let [opts (if (instance? PgPoolOptions opts) opts (options opts))]
+     (PgClient/pool ^Vertx vertx ^PgPoolOptions opts))))
 
 ;;
 ;; row
@@ -121,6 +127,26 @@
                        (let [row (or (.get ^Map cache sql) (->row sql rs))]
                          (.complete cf (row (.next it))))))
                    (.completeExceptionally cf (.cause ^AsyncResult res))))))
+           cf))
+       (query [_ pool sqlvec]
+         (let [sql (-get-sql sqlvec)
+               params (-get-parameters sqlvec)
+               cf (CompletableFuture.)]
+           (.preparedQuery
+             ^PgPool pool
+             ^String sql
+             ^Tuple params
+             (reify
+               Handler
+               (handle [_ res]
+                 (if (.succeeded ^AsyncResult res)
+                   (let [rs ^PgRowSet (.result ^AsyncResult res)
+                         it (.iterator rs)]
+                     (if-not (.hasNext it)
+                       (.complete cf nil)
+                       (let [row (or (.get ^Map cache sql) (->row sql rs))]
+                         (.complete cf (row (.next it))))))
+                   (.completeExceptionally cf (.cause ^AsyncResult res))))))
            cf))))))
 
 ;;
@@ -163,9 +189,10 @@
 
   (def mapper (pa/data-mapper))
 
-  (-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
-      (pa/then :randomnumber)
-      (deref))
+  (pmap
+    (fn [_] (-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
+                (pa/then :randomnumber)
+                (deref))) (range 1000))
   ; => #<Promise[~]>
   ; prints 2839
 
