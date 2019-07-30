@@ -27,9 +27,9 @@
   (get-value [rs i]
     (.getValue rs ^Integer i)))
 
-(defprotocol DataMapper
-  (^java.util.concurrent.CompletionStage query-one [this ^PgPool pool sqlvec])
-  (^java.util.concurrent.CompletionStage query [this ^PgPool pool sqlvec]))
+(defprotocol Context
+  (^java.util.concurrent.CompletionStage -query-one [this ^PgPool pool sqlvec])
+  (^java.util.concurrent.CompletionStage -query [this ^PgPool pool sqlvec]))
 
 (defn- col-map [^PgRowSet rs]
   (loop [i 0, acc [], [n & ns] (mapv keyword (.columnsNames rs))]
@@ -86,14 +86,14 @@
 ;; DataMapper
 ;;
 
-(defn ^DataMapper data-mapper
-  "Returns a [[DataMapper]] instance from options map:
+(defn ^Context context
+  "Returns a [[Context]] instance from options map:
 
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `tuple->value` or a [[RowCompiler]] to convert rows into values
   | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
-  ([] (data-mapper {}))
+  ([] (context {}))
   ([{:keys [row cache] :or {cache (HashMap.)}}]
    (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
          ->row (fn [sql ^PgRowSet rs]
@@ -107,8 +107,8 @@
      (reify
        p/Cached
        (cache [_] (into {} cache))
-       DataMapper
-       (query-one [_ pool sqlvec]
+       Context
+       (-query-one [_ pool sqlvec]
          (let [sql (-get-sql sqlvec)
                params (-get-parameters sqlvec)
                cf (CompletableFuture.)]
@@ -128,7 +128,7 @@
                          (.complete cf (row (.next it))))))
                    (.completeExceptionally cf (.cause ^AsyncResult res))))))
            cf))
-       (query [_ pool sqlvec]
+       (-query [_ pool sqlvec]
          (let [sql (-get-sql sqlvec)
                params (-get-parameters sqlvec)
                cf (CompletableFuture.)]
@@ -148,6 +148,22 @@
                          (.complete cf (row (.next it))))))
                    (.completeExceptionally cf (.cause ^AsyncResult res))))))
            cf))))))
+
+;;
+;; public api
+;;
+
+(defn query-one
+  ([connection sqlvec]
+   (-query-one (context) connection sqlvec))
+  ([context connection sqlvec]
+   (-query-one context connection sqlvec)))
+
+(defn query
+  ([connection sqlvec]
+   (-query (context) connection sqlvec))
+  ([context connection sqlvec]
+   (-query context connection sqlvec)))
 
 ;;
 ;; utils

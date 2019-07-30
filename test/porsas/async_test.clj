@@ -7,8 +7,25 @@
      :user "benchmarkdbuser"
      :password "benchmarkdbpass"}))
 
-(def mapper (pa/data-mapper))
+(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (pa/then :randomnumber))
 
-(-> (pa/query-one mapper pool ["SELECT randomnumber from WORLD where id=$1" 1])
-    (pa/then :randomnumber)
+;;
+;; promesa
+;;
+
+(require '[promesa.core :as p])
+
+(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (p/chain :randomnumber)
+    (deref))
+
+;;
+;; manifold
+;;
+
+(require '[manifold.deferred :as d])
+
+(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (d/chain :randomnumber)
     (deref))

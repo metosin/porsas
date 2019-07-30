@@ -1,24 +1,37 @@
 (ns porsas.core-test
-  (:require [porsas.jdbc :as pj]
-            [porsas.next :as pn]
+  (:require [porsas.jdbc :as jdbc]
+            [porsas.next :as next]
+            [next.jdbc.sql]
             [porsas.perf-utils :refer :all]
+            [next.jdbc]
+            [jdbc.core]
             [clojure.java.jdbc :as j]
-            [next.jdbc :as jdbc]
-            [jdbc.core :as funcool]
             [clojure.string :as str]
             [criterium.core :as cc])
   (:import (java.sql ResultSet Connection)))
 
 (def db {:dbtype "h2:mem" :dbname "perf"})
-(def ^Connection connection (j/get-connection db))
+(def ^Connection connection (next.jdbc/get-connection db))
 
-(try (j/execute! db ["DROP TABLE fruit"]) (catch Exception _))
-(j/execute! db ["CREATE TABLE fruit (id int default 0, name varchar(32) primary key, appearance varchar(32), cost int, grade real)"])
-(j/insert-multi! db :fruit [:id :name :appearance :cost :grade]
-                 [[1 "Apple" "red" 59 87]
-                  [2, "Banana", "yellow", 29, 92.2]
-                  [3, "Peach", "fuzzy", 139, 90.0]
-                  [4, "Orange", "juicy", 89, 88.6]])
+(try (next.jdbc/execute! db ["DROP TABLE fruit"]) (catch Exception _))
+
+(next.jdbc/execute!
+  connection
+  ["CREATE TABLE fruit (
+    id int default 0,
+    name varchar(32) primary key,
+    appearance varchar(32),
+    cost int,
+    grade real)"])
+
+(next.jdbc.sql/insert-multi!
+  connection
+  :fruit
+  [:id :name :appearance :cost :grade]
+  [[1 "Apple" "red" 59 87]
+   [2, "Banana", "yellow", 29, 92.2]
+   [3, "Peach", "fuzzy", 139, 90.0]
+   [4, "Orange", "juicy", 89, 88.6]])
 
 (defrecord Fruit [id name appearance cost grade])
 
@@ -40,6 +53,10 @@
     (.close ps)
     res))
 
+(def ctx (jdbc/context))
+
+(jdbc/query ctx connection "SELECT * FROM fruit")
+
 (defn perf-test []
 
   ;; 770ns
@@ -47,46 +64,41 @@
   (bench! (java-query connection "SELECT * FROM fruit"))
 
   ;; 840ns
-  (let [mapper (pj/data-mapper {:row (pj/rs->map)})]
+  (let [ctx (jdbc/context {:row (jdbc/rs->map)})]
     (title "porsas: compiled query")
-    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
+    (bench! (jdbc/query ctx connection "SELECT * FROM fruit")))
 
   ;; 830ns
-  (let [mapper (pj/data-mapper {:row rs->Fruit})]
+  (let [ctx (jdbc/context {:row rs->Fruit})]
     (title "porsas: hand-written")
-    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
+    (bench! (jdbc/query ctx connection "SELECT * FROM fruit")))
 
   ;; 810ns
-  (let [mapper (pj/data-mapper {:row (pj/rs->record Fruit)})]
+  (let [ctx (jdbc/context {:row (jdbc/rs->record Fruit)})]
     (title "porsas: inferred from record")
-    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
+    (bench! (jdbc/query ctx connection "SELECT * FROM fruit")))
 
   ;; 780ns
-  (let [mapper (pj/data-mapper {:row (pj/rs->compiled-record)})]
+  (let [ctx (jdbc/context {:row (jdbc/rs->compiled-record)})]
     (title "porsas: compiled record")
-    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
+    (bench! (jdbc/query ctx connection "SELECT * FROM fruit")))
 
   ;; 1700ns
-  (title "porsas: cached query")
-  (bench! (pj/query pj/default-mapper connection "SELECT * FROM fruit"))
-
-  ;; 2400ns
   (title "porsas: dynamic query")
-  (let [mapper (pj/data-mapper {:cache nil})]
-    (bench! (pj/query mapper connection "SELECT * FROM fruit")))
+  (bench! (jdbc/query connection "SELECT * FROM fruit"))
 
   ;; 1700ns
   (title "next.jdbc: porsas compiled")
-  (let [cached-builder (pn/caching-row-builder)]
-    (bench! (jdbc/execute! connection ["SELECT * FROM fruit"] {:builder-fn cached-builder})))
+  (let [cached-builder (next/caching-row-builder)]
+    (bench! (next.jdbc/execute! connection ["SELECT * FROM fruit"] {:builder-fn cached-builder})))
 
   ;; 4400ns
   (title "next.jdbc")
-  (bench! (jdbc/execute! connection ["SELECT * FROM fruit"]))
+  (bench! (next.jdbc/execute! connection ["SELECT * FROM fruit"]))
 
   ;; 5000µs
   (title "clojure.jdbc")
-  (bench! (funcool/fetch connection ["SELECT * FROM fruit"]))
+  (bench! (jdbc.core/fetch connection ["SELECT * FROM fruit"]))
 
   ;; 7000ns
   (title "java.jdbc")
@@ -95,13 +107,13 @@
 (defn perf-test-one []
 
   ;; 480ns
-  (let [mapper (pj/data-mapper {:row (pj/rs->map)})]
+  (let [ctx (jdbc/context {:row (jdbc/rs->compiled-record)})]
     (title "porsas: compiled query")
-    (bench! (pj/query-one mapper connection ["SELECT * FROM fruit where appearance = ? " "red"])))
+    (bench! (jdbc/query-one ctx connection ["SELECT * FROM fruit where appearance = ? " "red"])))
 
   ;; 1890ns
   (title "next.jdbc")
-  (bench! (jdbc/execute-one! connection ["SELECT * FROM fruit where appearance = ? " "red"]))
+  (bench! (next.jdbc/execute-one! connection ["SELECT * FROM fruit where appearance = ? " "red"]))
 
   ;; 4300ns
   (title "java.jdbc")
@@ -127,8 +139,8 @@
       (println "    type:" (.getColumnTypeName meta i))
       (println "   class:" (.getColumnClassName meta i))
       (println)
-      (println "     key:" ((pj/unqualified-key str/lower-case) meta i))
-      (println "    qkey:" ((pj/qualified-key str/lower-case) meta i))
+      (println "     key:" ((jdbc/unqualified-key str/lower-case) meta i))
+      (println "    qkey:" ((jdbc/qualified-key str/lower-case) meta i))
       (println))))
 
 (comment

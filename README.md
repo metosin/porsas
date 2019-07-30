@@ -12,65 +12,17 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 [![Clojars Project](http://clojars.org/metosin/porsas/latest-version.svg)](http://clojars.org/metosin/porsas)
 
-## Usage
+## Basics
 
-`porsas` provides tools for precompiling the functions to convert `ResultSet` into Clojure values. This enables basically Java-fast JDBC queries while using idiomatic Clojure.
+`porsas` provides tools for precompiling the functions to convert database results into Clojure values. This enables basically Java-fast database queries using idiomatic Clojure.
 
-```clj
-(defprotocol DataMapper
-  (cache [this])
-  (query-one [this ^Connection connection sqlvec])
-  (query [this ^Connection connection sqlvec]))
-```
+SQL queries are executed against a `Context`, which caches compiled row transformation functions based on database metadata. Currently, only `query-one` and `query` functions are supported.
 
-`porsas.core/compile` returns a `porsas.core/DataMapper` instance. The following options are available for the compiler:
+There are different `Context` implementations:
 
-| key           | description |
-| --------------|-------------|
-| `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
-| `:key`        | Optional function of `rs-meta i->key` to create key for map-results"
-
-Note: some `RowCompiler` implementations (like `p/rs->map`) generate the code at runtime, which might not supported in all platforms like [GraalVM](https://www.graalvm.org/).
-
-### Examples
-
-#### A Java JDBC query
-
-```clj
-;; 630ns
-(title "java")
-(bench! (java-query connection "SELECT * FROM fruit"))
-```
-
-#### Compiled query functions
-
-```clj
-(def mapper (p/data-mapper {:row (p/rs->map)}))
-
-;; 630ns
-(title "porsas: compiled & cached query")
-(bench! (p/query mapper connection "SELECT * FROM fruit")))
-```
-
-### Cached query functions
-
-With defaults, a bit slower (non-compiled) mapper is used. Works on all platforms.
-
-```clj
-;; 1300ns
-(title "porsas: cached query")
-(bench! (p/query p/default-mapper connection "SELECT * FROM fruit")))
-```
-
-### Fully Dynamic queries
-
-```clj
-(def mapper (p/data-mapper {:cache nil)}))
-
-;; 1500ns
-(title "porsas: dynamic query")
-(bench! (p/query mapper connection "SELECT * FROM fruit"))
-```
+* [JDBC](#JDBC), a standalone JDBC implementation
+* [Async SQL](#AsyncSQL), non-blocking SQL access
+* [jdbc.next](#), plugin for [`next.jdbc`](https://github.com/seancorfield/next-jdbc)
 
 ## Performance
 
@@ -78,11 +30,116 @@ At least an order of magnitude faster than [`clojure.java.jdbc`](https://github.
 
 <img src="./docs/images/porsas.png"/>
 
-## TODO
+## Usage
 
-* more tests
-* batch-api
-* async-api for postgresql?
+### JDBC
+
+With defaults:
+
+```clj
+(require '[porsas.jdbc])
+
+(def ctx 
+  (jdbc/context))
+
+(jdbc/query-one ctx connection ["select * from fruit where appearance = ?" "red"])
+; {:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
+```
+
+Returning maps with qualified keys:
+
+```clj
+(def ctx
+  (jdbc/context
+    {:key (jdbc/qualified-key)}))
+
+(jdbc/query-one ctx connection ["select * from fruit where appearance = ?" "red"])
+; #:FRUIT{:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
+```
+
+Returning generated Records with lowercased keys:
+
+```clj
+(def ctx
+  (jdbc/context
+    {:row (jdbc/rs->compiled-record)
+     :key (jdbc/unqualified-key str/lower-case)}))
+
+(jdbc/query-one ctx connection ["select * from fruit where appearance = ?" "red"])
+; ; => #user.DBResult6208{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
+```
+
+Omitting `Context` bypasses caching, when performance doesn't matter, e.g. when exploring in REPL:
+
+```clj
+(jdbc/query-one connection ["select * from fruit where appearance = ?" "red"])
+; {:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
+```
+
+### Async SQL
+
+Uses [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-client) and can be used with libraries like [Promesa](https://github.com/funcool/promesa) and [Manifold](https://github.com/ztellman/manifold).
+
+```clj
+(require '[porsas.async :as async])
+
+;; define a pool
+(def pool
+  (async/pool
+    {:uri "postgresql://localhost:5432/hello_world"
+     :user "benchmarkdbuser"
+     :password "benchmarkdbpass"
+     :size 16}))
+
+(-> (async/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (async/then :randomnumber)
+    (async/then println))
+; prints 504
+```
+
+A blocking call:
+
+```clj
+(-> (async/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (async/then :randomnumber)
+    (deref))
+```
+
+#### Using Promesa
+
+```clj
+(require '[promesa.core :as p])
+
+(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (p/chain :randomnumber println))
+; #<Promise[~]>
+; printls 504
+```
+
+#### Using Manifold
+
+```clj
+(require '[manifold.deferred :as d])
+
+(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+    (d/chain :randomnumber println))
+; << … >>
+; printls 504
+```
+
+### next.jdbc
+
+Using porsas with `:builder-fn` option of `next.jdbc`:
+
+```clj
+(require '[porsas.next])
+(require '[next.jdbc])
+
+(def builder-fn (porsas.next/caching-row-builder))
+
+(next.jdbc/execute-one! connection ["select * from fruit where appearance = ?" "red"] {:builder-fn builder-fn})
+; #:FRUIT{:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
+```
 
 ## License
 

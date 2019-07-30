@@ -14,8 +14,9 @@
                    :dependencies [[org.clojure/clojure "1.10.1"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.4.0"]
                                   [funcool/promesa "2.0.1"]
+                                  [manifold "0.1.8"]
                                   [com.h2database/h2 "1.4.199"]
-                                  [seancorfield/next.jdbc "1.0.0"]
+                                  [seancorfield/next.jdbc "1.0.4"]
                                   [funcool/clojure.jdbc "0.9.0"]
                                   [org.clojure/java.jdbc "0.7.9"]
                                   [criterium "0.4.5"]]}

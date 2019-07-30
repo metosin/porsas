@@ -41,9 +41,9 @@
   (get-value [rs i]
     (.getObject rs ^Integer i)))
 
-(defprotocol DataMapper
-  (query-one [this ^Connection connection sqlvec])
-  (query [this ^Connection connection sqlvec]))
+(defprotocol Context
+  (-query-one [this ^Connection connection sqlvec])
+  (-query [this ^Connection connection sqlvec]))
 
 ;;
 ;; Implementation
@@ -111,15 +111,15 @@
 ;; mapper
 ;;
 
-(defn ^DataMapper data-mapper
-  "Returns a [[DataMapper]] instance from options map:
+(defn ^Context context
+  "Returns a [[Context]] instance from options map:
 
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
   | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
-  ([] (compile {}))
+  ([] (context {}))
   ([{:keys [row key cache] :or {key (unqualified-key)
                                 cache (java.util.HashMap.)}}]
    (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
@@ -134,8 +134,8 @@
      (reify
        p/Cached
        (cache [_] (into {} cache))
-       DataMapper
-       (query-one [_ connection sqlvec]
+       Context
+       (-query-one [_ connection sqlvec]
          (let [sql (-get-sql sqlvec)
                params (-get-parameter-iterator sqlvec)
                ps (.prepareStatement ^Connection connection sql)]
@@ -146,7 +146,7 @@
                (if (.next rs) (row rs)))
              (finally
                (.close ps)))))
-       (query [_ connection sqlvec]
+       (-query [_ connection sqlvec]
          (let [sql (-get-sql sqlvec)
                it (-get-parameter-iterator sqlvec)
                ps (.prepareStatement ^Connection connection sql)]
@@ -161,4 +161,18 @@
              (finally
                (.close ps)))))))))
 
-(def default-mapper (data-mapper nil))
+;;
+;; public api
+;;
+
+(defn query-one
+  ([connection sqlvec]
+   (-query-one (context) connection sqlvec))
+  ([context connection sqlvec]
+   (-query-one context connection sqlvec)))
+
+(defn query
+  ([connection sqlvec]
+   (-query (context) connection sqlvec))
+  ([context connection sqlvec]
+   (-query context connection sqlvec)))
