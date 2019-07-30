@@ -1,4 +1,4 @@
-(defproject metosin/porsas "0.0.1-alpha12"
+(defproject metosin/porsas "0.0.1-alpha13"
   :description "Spike Lee for Fast DB-access with Clojure"
   :url "https://github.com/metosin/porsas"
   :deploy-repositories [["releases" :clojars]]
