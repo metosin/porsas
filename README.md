@@ -58,7 +58,7 @@ Returning maps with qualified keys:
 ; #:FRUIT{:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
 ```
 
-Generate Records for each unique Resultset, with lowercased keys (uses runtime code generation, so can't be used with [GraalVM](https://www.graalvm.org/):
+Generate Records for each unique Resultset, with lowercased keys. NOTE: this feature uses runtime code generation, so it doesn't work under [GraalVM](https://www.graalvm.org/):
 
 ```clj
 (def ctx
