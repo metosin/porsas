@@ -84,6 +84,8 @@ Uses non-blocking [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-
 ```clj
 (require '[porsas.async :as async])
 
+(def ctx (async/context))
+
 ;; define a pool
 (def pool
   (async/pool
@@ -92,7 +94,7 @@ Uses non-blocking [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-
      :password "benchmarkdbpass"
      :size 16}))
 
-(-> (async/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+(-> (async/query-one ctx pool ["SELECT randomnumber from WORLD where id=$1" 1])
     (async/then :randomnumber)
     (async/then println))
 ; prints 504
@@ -101,7 +103,7 @@ Uses non-blocking [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-
 A blocking call:
 
 ```clj
-(-> (async/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+(-> (async/query-one ctx pool ["SELECT randomnumber from WORLD where id=$1" 1])
     (async/then :randomnumber)
     (deref))
 ```
@@ -111,7 +113,7 @@ A blocking call:
 ```clj
 (require '[promesa.core :as p])
 
-(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+(-> (pa/query-one ctx pool ["SELECT randomnumber from WORLD where id=$1" 1])
     (p/chain :randomnumber println))
 ; #<Promise[~]>
 ; printls 504
@@ -122,7 +124,7 @@ A blocking call:
 ```clj
 (require '[manifold.deferred :as d])
 
-(-> (pa/query-one pool ["SELECT randomnumber from WORLD where id=$1" 1])
+(-> (pa/query-one ctx pool ["SELECT randomnumber from WORLD where id=$1" 1])
     (d/chain :randomnumber println))
 ; << … >>
 ; printls 504
