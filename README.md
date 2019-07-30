@@ -16,13 +16,15 @@ Related dicsussion: https://clojureverse.org/t/next-jdbc-early-access/4091
 
 `porsas` provides tools for precompiling the functions to convert database results into Clojure values. This enables basically Java-fast database queries using idiomatic Clojure.
 
-SQL queries are executed against a `Context`, which caches compiled row transformation functions based on database metadata. Currently, only `query-one` and `query` functions are supported.
+SQL queries are executed against a `Context`, which caches compiled row transformation functions based on database metadata.
 
 There are different `Context` implementations:
 
 * [JDBC](#JDBC), a standalone JDBC implementation
 * [Async SQL](#AsyncSQL), non-blocking SQL access
 * [jdbc.next](#), plugin for [`next.jdbc`](https://github.com/seancorfield/next-jdbc)
+
+Currently, only eager `query-one` and `query` functions are supported.
 
 ## Performance
 
@@ -39,8 +41,7 @@ With defaults:
 ```clj
 (require '[porsas.jdbc])
 
-(def ctx 
-  (jdbc/context))
+(def ctx (jdbc/context))
 
 (jdbc/query-one ctx connection ["select * from fruit where appearance = ?" "red"])
 ; {:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
@@ -57,7 +58,7 @@ Returning maps with qualified keys:
 ; #:FRUIT{:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
 ```
 
-Returning generated Records with lowercased keys:
+Generate Records for each unique Resultset, with lowercased keys (uses runtime code generation, so can't be used with [GraalVM](https://www.graalvm.org/):
 
 ```clj
 (def ctx
@@ -69,7 +70,7 @@ Returning generated Records with lowercased keys:
 ; ; => #user.DBResult6208{:id 1, :name "Apple", :appearance "red", :cost 59, :grade 87.0}
 ```
 
-Omitting `Context` bypasses caching, when performance doesn't matter, e.g. when exploring in REPL:
+`Context` can be omitted, bypassing all caching. Can be used when performance doesn't matter, e.g. when exploring in REPL:
 
 ```clj
 (jdbc/query-one connection ["select * from fruit where appearance = ?" "red"])
@@ -78,7 +79,7 @@ Omitting `Context` bypasses caching, when performance doesn't matter, e.g. when 
 
 ### Async SQL
 
-Uses [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-client) and can be used with libraries like [Promesa](https://github.com/funcool/promesa) and [Manifold](https://github.com/ztellman/manifold).
+Uses non-blocking [vertx-sql-client](https://github.com/eclipse-vertx/vertx-sql-client) and can be used with libraries like [Promesa](https://github.com/funcool/promesa) and [Manifold](https://github.com/ztellman/manifold).
 
 ```clj
 (require '[porsas.async :as async])
@@ -105,7 +106,7 @@ A blocking call:
     (deref))
 ```
 
-#### Using Promesa
+#### With Promesa
 
 ```clj
 (require '[promesa.core :as p])
@@ -116,7 +117,7 @@ A blocking call:
 ; printls 504
 ```
 
-#### Using Manifold
+#### With Manifold
 
 ```clj
 (require '[manifold.deferred :as d])
@@ -140,6 +141,12 @@ Using porsas with `:builder-fn` option of `next.jdbc`:
 (next.jdbc/execute-one! connection ["select * from fruit where appearance = ?" "red"] {:builder-fn builder-fn})
 ; #:FRUIT{:ID 1, :NAME "Apple", :APPEARANCE "red", :COST 59, :GRADE 87.0}
 ```
+
+## More info
+
+There is [#sql](https://clojurians.slack.com/messages/sql/) in [Clojurians Slack](http://clojurians.net/) for discussion & help. 
+
+Roadmap as [issues](https://github.com/metosin/porsas/issues).
 
 ## License
 
