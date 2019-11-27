@@ -141,11 +141,12 @@
                (handle [_ res]
                  (if (.succeeded ^AsyncResult res)
                    (let [rs ^PgRowSet (.result ^AsyncResult res)
-                         it (.iterator rs)]
-                     (if-not (.hasNext it)
-                       (.complete cf nil)
-                       (let [row (or (.get ^Map cache sql) (->row sql rs))]
-                         (.complete cf (row (.next it))))))
+                         it (.iterator rs)
+                         row (or (.get ^Map cache sql) (->row sql rs))]
+                     (loop [res []]
+                       (if (.hasNext it)
+                         (recur (conj res (row (.next it))))
+                         (.complete cf res))))
                    (.completeExceptionally cf (.cause ^AsyncResult res))))))
            cf))))))
 
