@@ -9,9 +9,9 @@
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
   :dependencies [[org.postgresql/postgresql "42.2.6"]
-                 [io.reactiverse/reactive-pg-client "0.11.4"]]
+                 [io.vertx/vertx-pg-client  "4.2.1"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
-                   :dependencies [[org.clojure/clojure "1.10.1"]
+                   :dependencies [[org.clojure/clojure "1.10.3"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.4.0"]
                                   [funcool/promesa "2.0.1"]
                                   [manifold "0.1.8"]
