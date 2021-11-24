@@ -8,18 +8,18 @@
             :comments "same as Clojure"}
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
-  :dependencies [[org.postgresql/postgresql "42.2.6"]
+  :dependencies [[org.postgresql/postgresql "42.3.1"]
                  [io.reactiverse/reactive-pg-client "0.11.4"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
-                   :dependencies [[org.clojure/clojure "1.10.1"]
-                                  [com.clojure-goes-fast/clj-async-profiler "0.4.0"]
+                   :dependencies [[org.clojure/clojure "1.10.3"]
+                                  [com.clojure-goes-fast/clj-async-profiler "0.5.1"]
                                   [funcool/promesa "2.0.1"]
                                   [manifold "0.1.8"]
                                   [com.h2database/h2 "1.4.199"]
-                                  [seancorfield/next.jdbc "1.0.4"]
+                                  [seancorfield/next.jdbc "1.2.659"]
                                   [funcool/clojure.jdbc "0.9.0"]
                                   [org.clojure/java.jdbc "0.7.9"]
-                                  [criterium "0.4.5"]]}
+                                  [criterium "0.4.6"]]}
              :perf {:jvm-opts ^:replace ["-server"
                                          "-Xmx4096m"
                                          "-Dclojure.compiler.direct-linking=true"]}}

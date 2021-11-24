@@ -12,7 +12,7 @@
   ([key]
    (let [cache (HashMap.)] ;; TODO: make bounded
      (fn [^ResultSet rs opts]
-       (let [sql (:next.jdbc/sql-string opts)
+       (let [sql   (:next.jdbc/sql-string opts)
              ->row (or (.get cache sql)
                        (let [->row (p/rs-> 1 nil (map last (pj/col-map rs key)))]
                          (.put cache sql ->row)
@@ -23,9 +23,17 @@
            rs/RowBuilder
            (->row [_] (->row rs))
            (with-column [_ row _] row)
+           (with-column-value [_ row _ _] row)
            (column-count [_] 0)
            (row! [_ row] row)
            rs/ResultSetBuilder
            (->rs [_] (transient []))
            (with-row [_ rs row] (conj! rs row))
-           (rs! [_ rs] (persistent! rs))))))))
+           (rs! [_ rs] (persistent! rs))
+           clojure.lang.ILookup ; only supports :cols and :rsmeta
+           (valAt [this k] (get this k nil))
+           (valAt [this k not-found]
+             (case k
+               :cols   (map last (pj/col-map rs key))
+               :rsmeta (.getMetaData rs)
+               not-found))))))))

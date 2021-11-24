@@ -1,16 +1,16 @@
 {:paths   ["src"]
- :deps    {org.postgresql/postgresql         {:mvn/version "42.2.6"}
+ :deps    {org.postgresql/postgresql         {:mvn/version "42.3.1"}
            io.reactiverse/reactive-pg-client {:mvn/version "0.11.4"}}
  :aliases {:test   {:extra-paths ["test"]
-                    :extra-deps  {org.clojure/clojure                      {:mvn/version "1.10.1"}
-                                  com.clojure-goes-fast/clj-async-profiler {:mvn/version "0.4.0"}
+                    :extra-deps  {org.clojure/clojure                      {:mvn/version "1.10.3"}
+                                  com.clojure-goes-fast/clj-async-profiler {:mvn/version "0.5.1"}
                                   funcool/promesa                          {:mvn/version "2.0.1"}
-                                  manifold                                 {:mvn/version "0.1.8"}
+                                  manifold/manifold                        {:mvn/version "0.1.8"}
                                   com.h2database/h2                        {:mvn/version "1.4.199"}
-                                  seancorfield/next.jdbc                   {:mvn/version "1.0.4"}
+                                  seancorfield/next.jdbc                   {:mvn/version "1.2.659"}
                                   funcool/clojure.jdbc                     {:mvn/version "0.9.0"}
                                   org.clojure/java.jdbc                    {:mvn/version "0.7.9"}
-                                  criterium                                {:mvn/version "0.4.5"}}}
+                                  criterium/criterium                      {:mvn/version "0.4.6"}}}
            :runner {:extra-deps {com.cognitect/test-runner
                                  {:git/url "https://github.com/cognitect-labs/test-runner"
                                   :sha     "f7ef16dc3b8332b0d77bc0274578ad5270fbfedd"}}
