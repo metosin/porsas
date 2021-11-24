@@ -44,27 +44,29 @@
 (defn ^Vertx vertx []
   (Vertx/vertx (.setPreferNativeTransport (VertxOptions.) true)))
 
-(defn ^PgConnectOptions options [{:keys [uri database host port user password pipelining-limit size]}]
+(defn ^PgConnectOptions options [{:keys [uri database host port user password pipelining-limit]}]
   (cond-> (if uri (PgConnectOptions/fromUri ^String uri) (PgConnectOptions.))
-          database (.setDatabase ^String database)
-          host (.setHost ^String host)
-          port (.setPort ^Integer port)
-          user (.setUser ^String user)
-          password (.setPassword ^String password)
-          true (.setCachePreparedStatements true)
-          pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)
-          size (.setMaxSize ^Integer size)))
+    database         (.setDatabase ^String database)
+    host             (.setHost ^String host)
+    port             (.setPort ^Integer port)
+    user             (.setUser ^String user)
+    password         (.setPassword ^String password)
+    true             (.setCachePreparedStatements true)
+    pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)))
 
-(defn ^PoolOptions ->poolOptions [{:keys [max-size]}]
+(defn ^PoolOptions ->pool-options [{:keys [max-size]}]
   (cond-> (PoolOptions.)
     max-size (.setMaxSize max-size)))
 
 (defn ^PgPool pool
   ([options]
    (pool (vertx) options))
-  ([vertx opts]
-   (let [opts (if (instance? PgConnectOptions opts) opts (options opts))]
-     (PgPool/pool ^Vertx vertx ^PgConnectOptions opts (->poolOptions {}))))) ;;TODO expose poolOptions to the interface
+  ([vertx options]
+   (pool vertx options (select-keys options [:max-size]))) ;; For backward compatibility
+  ([vertx connect-opts pool-opts]
+   (let [connect-opts (if (instance? PgConnectOptions connect-opts) connect-opts (options connect-opts))
+         pool-opts    (if (instance? PoolOptions pool-opts) pool-opts (->pool-options pool-opts))]
+     (PgPool/pool ^Vertx vertx ^PgConnectOptions connect-opts ^PoolOptions pool-opts))))
 
 ;;
 ;; row
