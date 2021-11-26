@@ -10,3 +10,4 @@ pom.xml.asc
 /.nrepl-history
 /doc
 /gh-pages
+docker/db/volumes/*

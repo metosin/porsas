@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  postgres:
+    image: 'postgres:11.2-alpine'
+    volumes:
+      - './docker/db/volumes:/var/lib/postgresql/data'
+      - './docker/db/initdb:/docker-entrypoint-initdb.d'
+    ports:
+      - '127.0.0.1:5432:5432'
+    environment:
+      - 'POSTGRES_DB=porsas'
+    healthcheck:
+      test: 'pg_isready -U postgres'
+      interval: '3s'
+      retries: 20
+  wait-for:
+    image: 'alpine'
+    command: '/bin/true'
+    depends_on:
+      postgres:
+        condition: service_healthy
