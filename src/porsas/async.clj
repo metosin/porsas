@@ -54,15 +54,15 @@
     true             (.setCachePreparedStatements true)
     pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)))
 
-(defn ^PoolOptions ->pool-options [{:keys [max-size]}]
+(defn ^PoolOptions ->pool-options [{:keys [size]}]
   (cond-> (PoolOptions.)
-    max-size (.setMaxSize max-size)))
+    size (.setMaxSize size)))
 
 (defn ^PgPool pool
   ([options]
    (pool (vertx) options))
-  ([vertx options]
-   (pool vertx options (select-keys options [:max-size]))) ;; For backward compatibility
+  ([vertx opts]
+   (pool vertx opts (if (map? opts) (select-keys opts [:size]) {}))) ;; For backward compatibility
   ([vertx connect-opts pool-opts]
    (let [connect-opts (if (instance? PgConnectOptions connect-opts) connect-opts (options connect-opts))
          pool-opts    (if (instance? PoolOptions pool-opts) pool-opts (->pool-options pool-opts))]
