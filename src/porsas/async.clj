@@ -1,11 +1,12 @@
 (ns porsas.async
-  (:require [porsas.core :as p])
+  (:require [porsas.cache :as cache]
+            [porsas.core :as p])
   (:import (io.vertx.pgclient PgPool PgConnectOptions)
            (io.vertx.sqlclient PoolOptions Tuple RowSet)
            io.vertx.sqlclient.impl.ArrayTuple
            io.vertx.pgclient.impl.RowImpl
            (io.vertx.core Vertx Handler AsyncResult VertxOptions)
-           (java.util Collection HashMap Map)
+           java.util.Collection
            (clojure.lang PersistentVector)
            (java.util.concurrent CompletableFuture Executor CompletionStage)
            (java.util.function Function)))
@@ -100,21 +101,19 @@
   | key           | description |
   | --------------|-------------|
   | `:row`        | Optional function of `tuple->value` or a [[RowCompiler]] to convert rows into values
-  | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
+  | `:cache`      | Optional [[porsas.cache/Cache]] instance to hold the compiled rowmappers"
   ([] (context {}))
-  ([{:keys [row cache] :or {cache (HashMap.)}}]
-   (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
-         ->row (fn [sql ^RowSet rs]
-                 (let [cols (col-map rs)
-                       row  (cond
-                              (satisfies? p/RowCompiler row) (p/compile-row row (map last cols))
-                              row                            row
-                              :else                          (p/rs->map-of-cols cols))]
-                   (.put ^Map cache sql row)
-                   row))]
+  ([{:keys [row cache]}]
+   (let [cache (or cache (cache/create-cache))
+         ->row (fn [_sql ^RowSet rs]
+                 (let [cols (col-map rs)]
+                   (cond
+                     (satisfies? p/RowCompiler row) (p/compile-row row (map last cols))
+                     row                            row
+                     :else                          (p/rs->map-of-cols cols))))]
      (reify
-       p/Cached
-       (cache [_] (into {} cache))
+       cache/Cached
+       (cache [_] (cache/elements cache))
        Context
        (-query-one [_ pool sqlvec]
          (let [sql    (-get-sql sqlvec)
@@ -130,7 +129,7 @@
                                      it (.iterator rs)]
                                  (if-not (.hasNext it)
                                    (.complete cf nil)
-                                   (let [row (or (.get ^Map cache sql) (->row sql rs))]
+                                   (let [row (cache/lookup-or-set cache sql #(->row %1 rs))]
                                      (.complete cf (row (.next it))))))
                                (.completeExceptionally cf (.cause ^AsyncResult res)))))))
            cf))
@@ -146,7 +145,7 @@
                              (if (.succeeded ^AsyncResult res)
                                (let [rs  ^RowSet (.result ^AsyncResult res)
                                      it  (.iterator rs)
-                                     row (or (.get ^Map cache sql) (->row sql rs))]
+                                     row (cache/lookup-or-set cache sql #(->row %1 rs))]
                                  (loop [res []]
                                    (if (.hasNext it)
                                      (recur (conj res (row (.next it))))

@@ -9,9 +9,6 @@
 (defprotocol GetValue
   (get-value [this i]))
 
-(defprotocol Cached
-  (cache [this]))
-
 ;;
 ;; Implementation
 ;;

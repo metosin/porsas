@@ -1,24 +1,21 @@
 (ns porsas.next
   (:require [next.jdbc.result-set :as rs]
-            [porsas.jdbc :as pj]
-            [porsas.core :as p])
-  (:import (java.sql ResultSet)
-           (java.util HashMap)))
+            [porsas.cache :as cache]
+            [porsas.core :as p]
+            [porsas.jdbc :as pj])
+  (:import (java.sql ResultSet)))
 
 (defn caching-row-builder
   "A [[next.jdbc.result-set/RowBuilder]] implementation using porsas. WIP."
   ([]
    (caching-row-builder (pj/qualified-key)))
   ([key]
-   (let [cache (HashMap.)] ;; TODO: make bounded
+   (let [cache (cache/create-cache)]
      (fn [^ResultSet rs opts]
        (let [sql   (:next.jdbc/sql-string opts)
-             ->row (or (.get cache sql)
-                       (let [->row (p/rs-> 1 nil (map last (pj/col-map rs key)))]
-                         (.put cache sql ->row)
-                         ->row))]
+             ->row (cache/lookup-or-set cache sql (fn [_] (p/rs-> 1 nil (map last (pj/col-map rs key)))))]
          (reify
-           p/Cached
+           cache/Cached
            (cache [_] (into {} cache))
            rs/RowBuilder
            (->row [_] (->row rs))
