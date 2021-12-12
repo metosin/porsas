@@ -122,7 +122,7 @@
   | `:cache`      | Optional [[porsas.cache/Cache]] instance to hold the compiled rowmappers"
   ([] (context {}))
   ([{:keys [row key cache] :or {key (unqualified-key)}}]
-   (let [c (or cache (cache/create-cache))
+   (let [c (or cache (cache/create-caffeine-cache))
          ->row (fn [_sql rs]
                  (let [cols (col-map rs key)]
                    (cond

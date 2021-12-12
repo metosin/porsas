@@ -104,7 +104,7 @@
   | `:cache`      | Optional [[porsas.cache/Cache]] instance to hold the compiled rowmappers"
   ([] (context {}))
   ([{:keys [row cache]}]
-   (let [cache (or cache (cache/create-cache))
+   (let [cache (or cache (cache/create-caffeine-cache))
          ->row (fn [_sql ^RowSet rs]
                  (let [cols (col-map rs)]
                    (cond

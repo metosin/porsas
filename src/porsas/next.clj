@@ -10,7 +10,7 @@
   ([]
    (caching-row-builder (pj/qualified-key)))
   ([key]
-   (let [cache (cache/create-cache)]
+   (let [cache (cache/create-caffeine-cache)]
      (fn [^ResultSet rs opts]
        (let [sql   (:next.jdbc/sql-string opts)
              ->row (cache/lookup-or-set cache sql (fn [_] (p/rs-> 1 nil (map last (pj/col-map rs key)))))]

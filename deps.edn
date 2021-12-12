@@ -1,6 +1,7 @@
 {:paths   ["src"]
  :deps    {org.postgresql/postgresql {:mvn/version "42.3.1"}
            org.clojure/core.cache    {:mvn/version "1.0.225"}
+           com.appsflyer/cloffeine   {:mvn/version "1.0.0"}
            io.vertx/vertx-pg-client  {:mvn/version "4.2.1"}}
  :aliases {:test   {:extra-paths ["test"]
                     :extra-deps  {org.clojure/clojure                      {:mvn/version "1.10.3"}
