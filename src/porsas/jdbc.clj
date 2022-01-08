@@ -1,8 +1,9 @@
 (ns porsas.jdbc
-  (:require [porsas.core :as p])
+  (:require [porsas.cache :as cache]
+            [porsas.core :as p])
   (:import (java.sql Connection PreparedStatement ResultSet ResultSetMetaData)
            (javax.sql DataSource)
-           (java.util Iterator Map)
+           java.util.Iterator
            (clojure.lang PersistentVector)))
 
 ;;
@@ -118,42 +119,39 @@
   | --------------|-------------|
   | `:row`        | Optional function of `rs->value` or a [[RowCompiler]] to convert rows into values
   | `:key`        | Optional function of `rs-meta i->key` to create key for map-results
-  | `:cache`      | Optional [[java.util.Map]] instance to hold the compiled rowmappers"
+  | `:cache`      | Optional [[porsas.cache/Cache]] instance to hold the compiled rowmappers"
   ([] (context {}))
-  ([{:keys [row key cache] :or {key (unqualified-key)
-                                cache (java.util.HashMap.)}}]
-   (let [cache (or cache (reify Map (get [_ _]) (put [_ _ _]) (entrySet [_])))
-         ->row (fn [sql rs]
-                 (let [cols (col-map rs key)
-                       row (cond
-                             (satisfies? p/RowCompiler row) (p/compile-row row (map last cols))
-                             row row
-                             :else (p/rs->map-of-cols cols))]
-                   (.put ^Map cache sql row)
-                   row))]
+  ([{:keys [row key cache] :or {key (unqualified-key)}}]
+   (let [c (or cache ((requiring-resolve 'porsas.cache.caffeine/create-cache)))
+         ->row (fn [_sql rs]
+                 (let [cols (col-map rs key)]
+                   (cond
+                     (satisfies? p/RowCompiler row) (p/compile-row row (map last cols))
+                     row                            row
+                     :else                          (p/rs->map-of-cols cols))))]
      (reify
-       p/Cached
-       (cache [_] (into {} cache))
+       cache/Cached
+       (cache [_] (cache/elements cache))
        Context
        (-query-one [_ connection sqlvec]
-         (let [sql (-get-sql sqlvec)
+         (let [sql    (-get-sql sqlvec)
                params (-get-parameter-iterator sqlvec)
-               ps (.prepareStatement ^Connection connection sql)]
+               ps     (.prepareStatement ^Connection connection sql)]
            (try
              (prepare! ps params)
-             (let [rs (.executeQuery ps)
-                   row (or (.get ^Map cache sql) (->row sql rs))]
-               (if (.next rs) (row rs)))
+             (let [rs  (.executeQuery ps)
+                   row (cache/lookup-or-set c sql #(->row %1 rs))]
+               (when (.next rs) (row rs)))
              (finally
                (.close ps)))))
        (-query [_ connection sqlvec]
          (let [sql (-get-sql sqlvec)
-               it (-get-parameter-iterator sqlvec)
-               ps (.prepareStatement ^Connection connection sql)]
+               it  (-get-parameter-iterator sqlvec)
+               ps  (.prepareStatement ^Connection connection sql)]
            (try
              (prepare! ps it)
-             (let [rs (.executeQuery ps)
-                   row (or (.get ^Map cache sql) (->row sql rs))]
+             (let [rs  (.executeQuery ps)
+                   row (cache/lookup-or-set c sql #(->row %1 rs))]
                (loop [res []]
                  (if (.next rs)
                    (recur (conj res (row rs)))

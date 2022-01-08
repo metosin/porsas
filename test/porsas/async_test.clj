@@ -6,9 +6,8 @@
    [manifold.deferred :as d])
   (:import io.vertx.pgclient.PgPool))
 
-(def pool-opts {:uri      "postgresql://localhost:5432/porsas"
-                :user     "user"
-                :password "password"})
+(def pool-opts {:uri  "postgresql://localhost:5432/porsas"
+                :user "postgres"})
 
 (t/deftest async
   (let [pool (pa/pool pool-opts)]
@@ -17,7 +16,7 @@
                  (pa/then :name)
                  (deref))))
 
-    (t/is (= "io.reactiverse.pgclient.PgException: relation \"non_existing\" does not exist"
+    (t/is (= "io.vertx.pgclient.PgException: ERROR: relation \"non_existing\" does not exist (42P01)"
              (-> (pa/query-one pool ["SELECT * from non_existing where id=$1" 1])
                  (pa/then :name)
                  (pa/catch #(-> % .getMessage))
