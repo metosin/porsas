@@ -5,7 +5,7 @@
                     :extra-deps  {org.clojure/clojure                      {:mvn/version "1.10.3"}
                                   com.clojure-goes-fast/clj-async-profiler {:mvn/version "0.5.1"}
                                   org.clojure/core.cache                   {:mvn/version "1.0.225"}
-                                  com.appsflyer/cloffeine                  {:mvn/version "1.0.0"}
+                                  com.github.ben-manes.caffeine/caffeine   {:mvn/version "3.0.5"}
                                   funcool/promesa                          {:mvn/version "2.0.1"}
                                   manifold/manifold                        {:mvn/version "0.1.8"}
                                   com.h2database/h2                        {:mvn/version "1.4.199"}

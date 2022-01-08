@@ -14,7 +14,7 @@
                    :dependencies [[org.clojure/clojure "1.10.3"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.5.1"]
                                   [org.clojure/core.cache "1.0.225"]
-                                  [com.appsflyer/cloffeine "1.0.0"]
+                                  [com.github.ben-manes.caffeine/caffeine "3.0.5"]
                                   [funcool/promesa "2.0.1"]
                                   [manifold "0.1.8"]
                                   [com.h2database/h2 "1.4.199"]
