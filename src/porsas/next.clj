@@ -12,7 +12,7 @@
   ([key & {:keys [cache]}]
    (let [cache (or cache ((requiring-resolve 'porsas.cache.caffeine/create-cache)))]
      (fn [^ResultSet rs opts]
-       (let [sql   (:next.jdbc/sql-string opts)
+       (let [sql   (:next.jdbc/sql-params opts)
              ->row (cache/lookup-or-set cache sql (fn [_] (p/rs-> 1 nil (map last (pj/col-map rs key)))))]
          (reify
            cache/Cached
