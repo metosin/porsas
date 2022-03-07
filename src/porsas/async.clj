@@ -1,7 +1,7 @@
 (ns porsas.async
   (:require [porsas.core :as p])
   (:import (io.vertx.pgclient PgPool PgConnectOptions)
-           (io.vertx.sqlclient PoolOptions Tuple RowSet)
+           (io.vertx.sqlclient PoolOptions Tuple RowSet SqlClient)
            io.vertx.sqlclient.impl.ArrayTuple
            io.vertx.pgclient.impl.RowImpl
            (io.vertx.core Vertx Handler AsyncResult VertxOptions)
@@ -30,8 +30,8 @@
     (.getValue rs ^Integer i)))
 
 (defprotocol Context
-  (^java.util.concurrent.CompletionStage -query-one [this ^PgPool pool sqlvec])
-  (^java.util.concurrent.CompletionStage -query [this ^PgPool pool sqlvec]))
+  (^java.util.concurrent.CompletionStage -query-one [this ^SqlClient sql-client sqlvec])
+  (^java.util.concurrent.CompletionStage -query [this ^SqlClient sql-client sqlvec]))
 
 (defn- col-map [^RowSet rs]
   (loop [i 0, acc [], [n & ns] (mapv keyword (.columnsNames rs))]
@@ -54,19 +54,36 @@
     true             (.setCachePreparedStatements true)
     pipelining-limit (.setPipeliningLimit ^Integer pipelining-limit)))
 
-(defn ^PoolOptions ->pool-options [{:keys [size]}]
-  (cond-> (PoolOptions.)
-    size (.setMaxSize size)))
+(defn ^PgConnectOptions ->connect-options [connect-opts]
+  (if (instance? PgConnectOptions connect-opts)
+    connect-opts
+    (options connect-opts)))
+
+(defn ^PoolOptions ->pool-options [pool-opts]
+  (if (instance? PoolOptions pool-opts)
+    pool-opts
+    (let [{:keys [size]} pool-opts]
+      (cond-> (PoolOptions.)
+        size (.setMaxSize size)))))
+
+(defn opts->pool-opts [opts]
+  (if (map? opts) (select-keys opts [:size]) {}))
 
 (defn ^PgPool pool
   ([options]
    (pool (vertx) options))
   ([vertx opts]
-   (pool vertx opts (if (map? opts) (select-keys opts [:size]) {}))) ;; For backward compatibility
-  ([vertx connect-opts pool-opts]
-   (let [connect-opts (if (instance? PgConnectOptions connect-opts) connect-opts (options connect-opts))
-         pool-opts    (if (instance? PoolOptions pool-opts) pool-opts (->pool-options pool-opts))]
-     (PgPool/pool ^Vertx vertx ^PgConnectOptions connect-opts ^PoolOptions pool-opts))))
+   (pool vertx opts (opts->pool-opts opts))) ;; For backward compatibility
+  ([^Vertx vertx connect-opts pool-opts]
+   (PgPool/pool vertx (->connect-options connect-opts) (->pool-options pool-opts))))
+
+(defn ^SqlClient pooled-client
+  ([options]
+   (pooled-client (vertx) options))
+  ([vertx opts]
+   (pooled-client vertx opts (opts->pool-opts opts))) ;; For backward compatibility
+  ([^Vertx vertx connect-opts pool-opts]
+   (PgPool/client vertx (->connect-options connect-opts) (->pool-options pool-opts))))
 
 ;;
 ;; row
@@ -116,11 +133,11 @@
        p/Cached
        (cache [_] (into {} cache))
        Context
-       (-query-one [_ pool sqlvec]
+       (-query-one [_ sql-client sqlvec]
          (let [sql    (-get-sql sqlvec)
                params (-get-parameters sqlvec)
                cf     (CompletableFuture.)]
-           (-> (.preparedQuery ^PgPool pool ^String sql)
+           (-> (.preparedQuery ^SqlClient sql-client ^String sql)
                (.execute ^Tuple params
                          (reify
                            Handler
@@ -134,11 +151,11 @@
                                      (.complete cf (row (.next it))))))
                                (.completeExceptionally cf (.cause ^AsyncResult res)))))))
            cf))
-       (-query [_ pool sqlvec]
+       (-query [_ sql-client sqlvec]
          (let [sql    (-get-sql sqlvec)
                params (-get-parameters sqlvec)
                cf     (CompletableFuture.)]
-           (-> (.preparedQuery ^PgPool pool ^String sql)
+           (-> (.preparedQuery ^SqlClient sql-client ^String sql)
                (.execute ^Tuple params
                          (reify
                            Handler
