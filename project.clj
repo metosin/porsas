@@ -8,8 +8,8 @@
             :comments "same as Clojure"}
   :scm {:name "git"
         :url "https://github.com/metosin/porsas"}
-  :dependencies [[org.postgresql/postgresql "42.3.1"]
-                 [io.vertx/vertx-pg-client  "4.2.1"]]
+  :dependencies [[org.postgresql/postgresql "42.3.3"]
+                 [io.vertx/vertx-pg-client  "4.2.5"]]
   :profiles {:dev {:global-vars {*warn-on-reflection* true}
                    :dependencies [[org.clojure/clojure "1.10.3"]
                                   [com.clojure-goes-fast/clj-async-profiler "0.5.1"]

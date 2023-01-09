@@ -1,6 +1,6 @@
 {:paths   ["src"]
- :deps    {org.postgresql/postgresql {:mvn/version "42.3.1"}
-           io.vertx/vertx-pg-client  {:mvn/version "4.2.1"}}
+ :deps    {org.postgresql/postgresql {:mvn/version "42.3.3"}
+           io.vertx/vertx-pg-client  {:mvn/version "4.2.5"}}
  :aliases {:test   {:extra-paths ["test"]
                     :extra-deps  {org.clojure/clojure                      {:mvn/version "1.10.3"}
                                   com.clojure-goes-fast/clj-async-profiler {:mvn/version "0.5.1"}
@@ -15,4 +15,11 @@
                                  {:git/url "https://github.com/cognitect-labs/test-runner"
                                   :sha     "f7ef16dc3b8332b0d77bc0274578ad5270fbfedd"}}
                     :main-opts  ["-m" "cognitect.test-runner"
-                                 "-d" "test"]}}}
+                                 "-d" "test"]}
+
+           :nvd    {; clojure -X:nvd :classpath '"'"$(lein with-profile -base,-system,-user,-provided,-dev classpath)"'"' 2>/dev/null && clojure -X:nvd :classpath '"'"$(clojure -Srepro -Spath)"'"' 2>/dev/null
+                    :replace-paths []
+                    :replace-deps  {nvd-clojure/nvd-clojure {:mvn/version "RELEASE"}}
+                    :exec-fn       nvd.task/check
+                    :exec-args     {:config-filename "nvd-clojure.json"}
+                    :jvm-opts      ["-Dclojure.main.report=stderr"]}}}

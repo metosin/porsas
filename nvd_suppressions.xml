@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <suppress>
+        <notes><![CDATA[
+   file name: vertx-pg-client-4.*.jar
+
+   These CVEs affect postgres servers, not clients like the current project.
+   ]]></notes>
+        <packageUrl regex="true">^pkg:maven/io\.vertx/vertx\-pg\-client@4\..*$</packageUrl>
+        <cpe>cpe:/a:postgresql:postgresql</cpe>
+    </suppress>
+</suppressions>
